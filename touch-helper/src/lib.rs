@@ -72,6 +72,13 @@ impl Stream {
         self.fingers.iter().all(|finger| finger.id.is_none())
     }
 
+    pub fn real_contact_count(&self) -> usize {
+        self.fingers
+            .iter()
+            .filter(|finger| finger.id.is_some())
+            .count()
+    }
+
     pub fn begin_tap(&mut self, x: i32, y: i32) -> Result<Vec<Event>, &'static str> {
         if !self.healthy {
             return Err("stream state is unknown");

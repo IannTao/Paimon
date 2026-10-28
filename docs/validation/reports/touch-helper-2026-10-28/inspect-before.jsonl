@@ -1,0 +1,2 @@
+{"event":"syscall_error","operation":"unsupported_tool_count_keys","errno":95}
+{"event":"error","message":"Operation not supported on transport endpoint (os error 95)"}

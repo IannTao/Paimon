@@ -104,7 +104,7 @@ fn exhausted_slots_and_out_of_range_pickup_coordinates_are_rejected() {
 }
 
 #[test]
-fn reserved_virtual_slot_and_id_cannot_be_overwritten_by_physical_contacts() {
+fn reserved_virtual_slot_stays_separate_from_physical_contacts() {
     let mut stream = Stream::new(2, 1000, 2000, 100).unwrap();
     stream.begin_tap(20, 30).unwrap();
     let frame = [

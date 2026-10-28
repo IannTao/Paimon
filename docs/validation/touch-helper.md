@@ -1,6 +1,6 @@
 # 限时单流触屏代理 helper
 
-实现日期：2026-10-28。对应 [输入方案研究](input-coexistence-research.md) 的最小验证顺序，交付独立 native helper，尚未接入现有 APK / Shizuku UserService。现有 shell tap 路径及失败证据保持不变，**本实现未执行真机创建、抓取、转发或游戏拾取验证**。
+实现日期：2026-10-28。对应 [输入方案研究](input-coexistence-research.md) 的最小验证顺序，交付独立 native helper，尚未接入现有 APK / Shizuku UserService。现有 shell tap 路径及失败证据保持不变。现已完成真机只读能力、空设备创建/销毁、内置显示识别、create-only watchdog 恢复、限时真正 grab 以及短时纯转发观察；**合成触点及游戏拾取仍未验证**。本轮证据见 [阶段验证记录](touch-helper-device-validation.md)。
 
 ## 构建与自动验证
 
@@ -51,9 +51,11 @@ stop
 
 单次合成触点持续约 50ms，相邻点击至少 1000ms，每轮最多 30 次，不积压补发。物理输入优先，每次循环最多读取 256 个事件，全部写入由同一线程串行完成；合成 DOWN/UP 只发生在物理帧边界，保留并恢复物理选择槽。
 
-虚拟设备复制物理设备的键、轴、分辨率、fuzz/flat、MSC 能力和输入属性，并额外保留一个物理流不可使用的槽及 tracking ID。这样真实手指不会在合成点击中途占用同一槽或 ID；物理槽已经全满时仍拒绝新增合成触点。真实 tracking ID 与各槽轴事件保持原样，合成触点存在时聚合 `BTN_TOUCH` 状态，避免最后一根真实手指抬起时误结束整个触摸。合成槽初始化所有已声明的 MT 附加轴。
+虚拟设备复制物理设备的键、轴、分辨率、fuzz/flat、MSC 能力和输入属性，并额外保留一个物理流不可使用的槽。合成 tracking ID 从实际范围内的空闲 ID 中分配，不扩大 ID 上限；若后续真实帧使用同一 ID，先单独结束合成触点，再原样转发该真实帧，优先保留真实触点。物理槽已经全满时仍拒绝新增合成触点。真实 tracking ID 与各槽轴事件保持原样，合成触点存在时聚合 `BTN_TOUCH` 状态，避免最后一根真实手指抬起时误结束整个触摸。合成槽初始化所有已声明的 MT 附加轴。
 
-当前明确拒绝半多点触控、非 Type B、缺少 DIRECT/BTN_TOUCH、非零 MT 坐标/槽最小值、超过 32 个物理槽、tracking ID 无法额外分配、带工具/触点计数按键或不支持的事件族的设备。拒绝不是设备策略已禁止 grab/uinput 的证据，应依据报告区分“不支持”“权限拒绝”和“实测通过”。
+允许单独声明 `BTN_TOOL_FINGER` 的设备。纯转发保留源按键状态；合成触点存在时按单指计数语义更新该键，合成结束后恢复缓存的真实按键状态。其计数语义依据 [Linux 5.15 input event codes](https://www.kernel.org/doc/html/v5.15/input/event-codes.html)，并非这台手机的实际手势序列已验证。手机故障恢复可用 `scripts/validate-touch-watchdog.sh`：此脚本仅创建空虚拟设备，核对父子进程后向 worker 发送 STOP，断言手机本地监护进程在 6 秒内报告心跳超时；不会 grab 或发送触摸。
+
+当前明确拒绝半多点触控、非 Type B、缺少 DIRECT/BTN_TOUCH、非零 MT 坐标/槽最小值、超过 32 个物理槽、tracking ID 范围不足、带除 BTN_TOOL_FINGER 之外的工具/触点计数按键或不支持的事件族的设备。拒绝不是设备策略已禁止 grab/uinput 的证据，应依据报告区分“不支持”“权限拒绝”和“实测通过”。
 
 ## 验收状态
 

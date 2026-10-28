@@ -7,3 +7,4 @@ dependencyResolutionManagement {
 }
 rootProject.name = "PaimonTouchProbe"
 include(":app")
+include(":touch-receiver")

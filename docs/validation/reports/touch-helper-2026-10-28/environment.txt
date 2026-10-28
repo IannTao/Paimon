@@ -1,0 +1,5 @@
+[ro.build.display.id]: [MyOS14.5.33_NX712J]
+[ro.build.fingerprint]: [nubia/CN_PQ82A11/PQ82A11:14/UKQ1.230917.001/20250225.113840:user/release-keys]
+[ro.build.version.release]: [14]
+[ro.build.version.sdk]: [34]
+[ro.product.model]: [NX712J]

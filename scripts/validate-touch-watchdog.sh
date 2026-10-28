@@ -4,6 +4,28 @@ set -u
 helper=/data/local/tmp/paimon-touch-helper
 device=${1:?pass the inspected physical evdev path}
 log=/data/local/tmp/paimon-watchdog-check-$$.jsonl
+worker=''
+supervisor=''
+completed=0
+child_of() {
+    ps -p "$1" -o PPID | awk -v expected="$2" 'NR > 1 && $1 == expected {found=1} END {exit !found}'
+}
+cleanup() {
+    status=$?
+    trap - EXIT HUP INT TERM
+    if [ "$completed" -ne 1 ] && [ -n "$supervisor" ] && child_of "$supervisor" "$$"; then
+        if [ -n "$worker" ] && child_of "$worker" "$supervisor"; then
+            kill -KILL "$worker" 2>/dev/null || true
+        fi
+        kill -KILL "$supervisor" 2>/dev/null || true
+    fi
+    if [ -n "$supervisor" ]; then wait "$supervisor" 2>/dev/null || true; fi
+    exit "$status"
+}
+trap cleanup EXIT
+trap 'exit 129' HUP
+trap 'exit 130' INT
+trap 'exit 143' TERM
 sleep 15 | "$helper" create --device "$device" --seconds 15 >"$log" 2>&1 &
 supervisor=$!
 attempt=0
@@ -32,4 +54,5 @@ wait "$supervisor"
 result=$?
 cat "$log"
 printf '{"event":"watchdog_check","exitCode":%s,"observedSeconds":%s}\n' "$result" "$elapsed"
-[ "$result" -eq 2 ] && [ "$elapsed" -le 6 ]
+if [ "$result" -ne 2 ] || [ "$elapsed" -gt 6 ]; then exit 1; fi
+completed=1

@@ -160,6 +160,7 @@ pub fn run(options: Options) -> Result<i32, Box<dyn Error>> {
     let mut next_heartbeat = Instant::now();
     let mut tap_until = None;
     let mut next_tap = 0;
+    let mut reported_contacts = 0;
     loop {
         let now_ms = start.elapsed().as_millis() as u64;
         if start.elapsed() >= soft_limit {
@@ -191,6 +192,11 @@ pub fn run(options: Options) -> Result<i32, Box<dyn Error>> {
                 }
                 if event == SYN_REPORT {
                     device.write(&stream.forward(&frame)?)?;
+                    let contacts = stream.real_contact_count();
+                    if contacts != reported_contacts {
+                        println!("{{\"event\":\"real_contacts\",\"count\":{contacts}}}");
+                        reported_contacts = contacts;
+                    }
                     frame.clear();
                     frame_started = None;
                 }

@@ -1,0 +1,14 @@
+add device 3: /dev/input/event6
+  name:     "goodix_ts"
+  events:
+    KEY (0001): KEY_POWER             KEY_WAKEUP            BTN_TOOL_FINGER       BTN_TOUCH            
+                KEY_GOTO             
+    ABS (0003): ABS_X                 : value 0, min 0, max 17856, fuzz 0, flat 0, resolution 0
+                ABS_Y                 : value 0, min 0, max 39680, fuzz 0, flat 0, resolution 0
+                ABS_MT_SLOT           : value 0, min 0, max 9, fuzz 0, flat 0, resolution 0
+                ABS_MT_TOUCH_MAJOR    : value 0, min 0, max 4080, fuzz 0, flat 0, resolution 0
+                ABS_MT_POSITION_X     : value 0, min 0, max 17856, fuzz 0, flat 0, resolution 0
+                ABS_MT_POSITION_Y     : value 0, min 0, max 39680, fuzz 0, flat 0, resolution 0
+                ABS_MT_TRACKING_ID    : value 0, min 0, max 65535, fuzz 0, flat 0, resolution 0
+  input props:
+    INPUT_PROP_DIRECT
