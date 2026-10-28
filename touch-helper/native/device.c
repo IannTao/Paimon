@@ -121,6 +121,12 @@ static int read_caps(struct device *d, struct caps *c) {
         c->slots < 2 || c->slots > 32 || c->max_id == INT_MAX || c->max_id < c->slots) {
         errno = ENOTSUP; return failure("unsupported_mt_ranges");
     }
+    if ((bit(d->abs_bits, ABS_MT_TOOL_X) &&
+         (d->axes[ABS_MT_TOOL_X].minimum != 0 || d->axes[ABS_MT_TOOL_X].maximum != c->max_x)) ||
+        (bit(d->abs_bits, ABS_MT_TOOL_Y) &&
+         (d->axes[ABS_MT_TOOL_Y].minimum != 0 || d->axes[ABS_MT_TOOL_Y].maximum != c->max_y))) {
+        errno = ENOTSUP; return failure("unsupported_tool_coordinate_ranges");
+    }
     return 0;
 }
 
@@ -146,7 +152,8 @@ int ph_create(struct device *d) {
         if (!bit(d->abs_bits, i)) continue;
         CHECK(ioctl(d->virtual, UI_SET_ABSBIT, i));
         struct uinput_abs_setup setup = { .code = (uint16_t)i, .absinfo = d->axes[i] };
-        setup.absinfo.value = 0;
+        setup.absinfo.value = setup.absinfo.minimum > 0 ? setup.absinfo.minimum :
+                              (setup.absinfo.maximum < 0 ? setup.absinfo.maximum : 0);
         if (i == ABS_MT_SLOT || i == ABS_MT_TRACKING_ID) ++setup.absinfo.maximum;
         CHECK(ioctl(d->virtual, UI_ABS_SETUP, &setup));
     }
@@ -164,13 +171,19 @@ int ph_create(struct device *d) {
     return 0;
 }
 
-static int all_up(struct device *d, struct caps *c) {
+static int idle_state(struct device *d, const struct caps *c) {
     int32_t slots[33] = { ABS_MT_TRACKING_ID };
     CHECK(ioctl(d->physical, EVIOCGMTSLOTS((c->slots + 1) * sizeof(int32_t)), slots));
-    for (int i = 1; i <= c->slots; ++i) if (slots[i] != -1) { errno = EBUSY; return failure("fingers_must_be_up"); }
+    for (int i = 1; i <= c->slots; ++i) if (slots[i] != -1) return 0;
     unsigned char keys[(KEY_CNT + 7) / 8] = {0};
     CHECK(ioctl(d->physical, EVIOCGKEY(sizeof(keys)), keys));
-    if (bit(keys, BTN_TOUCH)) { errno = EBUSY; return failure("touch_key_must_be_up"); }
+    return bit(keys, BTN_TOUCH) ? 0 : 1;
+}
+
+static int all_up(struct device *d, const struct caps *c) {
+    int idle = idle_state(d, c);
+    if (idle < 0) return idle;
+    if (!idle) { errno = EBUSY; return failure("fingers_must_be_up"); }
     return 0;
 }
 
@@ -237,13 +250,30 @@ void ph_describe(struct device *d) {
 }
 
 int ph_poll(struct device *d, int watch_stdin) {
-    if (stopping) return 4;
     struct pollfd fds[2] = {{d->physical, POLLIN, 0}, {watch_stdin ? STDIN_FILENO : -1, POLLIN, 0}};
     int ready = poll(fds, 2, 10);
-    if (ready < 0 && errno == EINTR) return stopping ? 4 : 0;
+    if (ready < 0 && errno == EINTR) ready = 0;
     CHECK(ready);
     if (fds[0].revents & (POLLERR | POLLHUP | POLLNVAL)) { errno = ENODEV; return failure("physical_disconnected"); }
-    return (fds[0].revents & POLLIN ? 1 : 0) | (fds[1].revents & (POLLIN | POLLHUP | POLLERR) ? 2 : 0);
+    return (stopping ? 4 : 0) | (fds[0].revents & POLLIN ? 1 : 0) | (fds[1].revents & (POLLIN | POLLHUP | POLLERR) ? 2 : 0);
+}
+
+int ph_handover_ready(struct device *d, const struct caps *c) {
+    /* A userspace budget ending at SYN_REPORT is not proof the kernel queue is
+       drained. Check both queue and live slots, then check for a raced frame. */
+    for (int pass = 0; pass < 2; ++pass) {
+        struct pollfd fd = {d->physical, POLLIN, 0};
+        int ready = poll(&fd, 1, 0);
+        if (ready < 0 && errno == EINTR) return 0;
+        CHECK(ready);
+        if (fd.revents & (POLLERR | POLLHUP | POLLNVAL)) { errno = ENODEV; return failure("handover_device_lost"); }
+        if (ready) return 0;
+        if (pass == 0) {
+            int idle = idle_state(d, c);
+            if (idle <= 0) return idle;
+        }
+    }
+    return 1;
 }
 
 int ph_read(struct device *d, struct event *out) {
@@ -259,7 +289,7 @@ int ph_write(struct device *d, const struct event *events, int count) {
     for (int i = 0; i < count; ++i) {
         struct input_event output = { .type = events[i].kind, .code = events[i].code, .value = events[i].value };
         ssize_t written;
-        do { written = write(d->virtual, &output, sizeof(output)); } while (written < 0 && errno == EINTR && !stopping);
+        do { written = write(d->virtual, &output, sizeof(output)); } while (written < 0 && errno == EINTR);
         if (written != sizeof(output)) return failure("write_uinput_event");
     }
     return 0;

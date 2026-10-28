@@ -1,4 +1,5 @@
-use super::{json_string, Options};
+use super::{json_string, Mode, Options};
+use paimon_touch_helper::codes::*;
 use paimon_touch_helper::{Command, Event, Gate, Stream, SYN_REPORT};
 use std::{
     error::Error,
@@ -25,6 +26,7 @@ extern "C" {
     fn ph_describe(device: *mut c_void);
     fn ph_grab(device: *mut c_void, caps: *mut Caps) -> i32;
     fn ph_seed(device: *mut c_void, caps: *const Caps) -> i32;
+    fn ph_handover_ready(device: *mut c_void, caps: *const Caps) -> i32;
     fn ph_poll(device: *mut c_void, stdin: i32) -> i32;
     fn ph_read(device: *mut c_void, event: *mut Event) -> i32;
     fn ph_write(device: *mut c_void, events: *const Event, count: i32) -> i32;
@@ -86,7 +88,7 @@ pub fn run(options: Options) -> Result<i32, Box<dyn Error>> {
     let parent: i32 = std::env::var("PAIMON_SUPERVISOR_PID")?.parse()?;
     check(unsafe { ph_init(parent) })?;
     heartbeat()?;
-    if options.mode == "inspect" && options.device.is_none() {
+    if options.mode == Mode::Inspect && options.device.is_none() {
         let mut found = 0;
         for entry in std::fs::read_dir("/dev/input")? {
             heartbeat()?;
@@ -117,17 +119,17 @@ pub fn run(options: Options) -> Result<i32, Box<dyn Error>> {
     unsafe {
         ph_describe(device.0);
     }
-    if options.mode == "inspect" {
+    if options.mode == Mode::Inspect {
         return Ok(0);
     }
-    if options.mode != "grab" {
+    if options.mode != Mode::Grab {
         check(unsafe { ph_create(device.0) })?;
         println!(
             "{{\"event\":\"created\",\"sentTouch\":false,\"displayAssociation\":\"unverified\"}}"
         );
     }
-    let active = ["forward", "merge"].contains(&options.mode.as_str());
-    if options.mode != "create" {
+    let active = options.mode.forwards();
+    if options.mode != Mode::Create {
         // Allow Android to enumerate the empty virtual device before takeover.
         if active {
             for _ in 0..30 {
@@ -141,7 +143,7 @@ pub fn run(options: Options) -> Result<i32, Box<dyn Error>> {
     let mut stream = Stream::new(caps.slots as usize, caps.max_x, caps.max_y, caps.max_id)?;
     if active {
         check(unsafe { ph_seed(device.0, &caps) })?;
-        stream.forward(&[Event::new(3, 47, caps.selected), SYN_REPORT])?;
+        stream.forward(&[Event::new(EV_ABS, ABS_MT_SLOT, caps.selected), SYN_REPORT])?;
     }
     let start = Instant::now();
     // Start draining before the supervisor's hard deadline; never extend that deadline.
@@ -165,13 +167,17 @@ pub fn run(options: Options) -> Result<i32, Box<dyn Error>> {
             gate.apply(Command::Stop, now_ms);
         }
         // The single writer processes physical events first, with bounded work per iteration.
-        if active && ready & 1 != 0 {
+        if (active || options.mode == Mode::Grab) && ready & 1 != 0 {
             for _ in 0..256 {
                 let mut event = Event::new(0, 0, 0);
                 if check(unsafe { ph_read(device.0, &mut event) })? == 0 {
                     break;
                 }
-                if event.kind == 0 && event.code == 3 {
+                // A grab-only probe consumes history without ever writing touch.
+                if !active {
+                    continue;
+                }
+                if event.kind == EV_SYN && event.code == SYN_DROPPED {
                     return Err("SYN_DROPPED: state lost; abnormal recovery".into());
                 }
                 frame.push(event);
@@ -220,26 +226,28 @@ pub fn run(options: Options) -> Result<i32, Box<dyn Error>> {
                     .and_then(|line| Command::parse(line).ok());
                 match parsed {
                     Some(Command::Tap(x, y))
-                        if options.mode == "merge"
+                        if options.mode == Mode::Merge
                             && now_ms >= next_tap
                             && gate.allow_tap(now_ms) =>
                     {
                         match stream.begin_tap(x, y) {
                             Ok(mut output) => {
-                                let extra: Vec<_> = (48..=61)
+                                let extra: Vec<_> = (ABS_MT_TOUCH_MAJOR..=ABS_MT_TOOL_Y)
                                     .filter(|code| {
-                                        ![53, 54, 57].contains(code) && caps.axes[*code] != i32::MIN
+                                        ![ABS_MT_POSITION_X, ABS_MT_POSITION_Y, ABS_MT_TRACKING_ID]
+                                            .contains(code)
+                                            && caps.axes[*code as usize] != i32::MIN
                                     })
                                     .map(|code| {
                                         Event::new(
-                                            3,
-                                            code as u16,
-                                            if code == 60 {
+                                            EV_ABS,
+                                            code,
+                                            if code == ABS_MT_TOOL_X {
                                                 x
-                                            } else if code == 61 {
+                                            } else if code == ABS_MT_TOOL_Y {
                                                 y
                                             } else {
-                                                caps.axes[code]
+                                                caps.axes[code as usize]
                                             },
                                         )
                                     })
@@ -269,7 +277,11 @@ pub fn run(options: Options) -> Result<i32, Box<dyn Error>> {
                     }
                 }
             }
-            if gate.draining() && stream.real_fingers_up() {
+            if gate.draining()
+                && stream.real_fingers_up()
+                && (options.mode == Mode::Create
+                    || check(unsafe { ph_handover_ready(device.0, &caps) })? == 1)
+            {
                 device.write(&stream.end_tap())?;
                 break;
             }

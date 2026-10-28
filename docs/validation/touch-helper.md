@@ -12,13 +12,15 @@ cargo test --workspace --locked --offline
 cargo clippy --workspace --all-targets --locked --offline -- -D warnings
 ```
 
-输出：`target/aarch64-linux-android/release/paimon-touch-helper`。单独检查可用 `./scripts/build-touch-helper.ps1 -CheckOnly`。Windows 主机只能运行纯 Rust 测试和 CLI 参数校验，不能执行设备操作。watchdog 测试中的两个 ignored 测试是被父测试显式启动并终止的子进程夹具，不是遗漏的设备验证。
+输出：`target/aarch64-linux-android/release/paimon-touch-helper`。单独检查可用 `./scripts/build-touch-helper.ps1 -CheckOnly`。Windows 主机只能运行纯 Rust 测试和 CLI 参数校验，不能执行设备操作。watchdog 测试中的 ignored 测试是被父测试显式启动并结束的子进程夹具，不是遗漏的设备验证。
 
 ## 进程与恢复
 
 公开入口始终先启动手机本地监护进程，再启动持有 evdev/uinput fd 的 worker。监护进程不持有这些 fd；worker 每 100ms 报送心跳，超过 2 秒没有心跳或达到 `--seconds` 硬期限，监护进程直接终止并回收 worker。worker 设置 `PR_SET_PDEATHSIG=SIGKILL`，并复查父 PID，监护进程异常退出也会触发资源释放。`--worker` 是内部入口，不应直接调用。
 
 `stop`、stdin EOF、信号、许可过期都停止新增合成触点，保留健康的真实输入转发，直到所有真实触点抬起再交接。正常停用前会主动释放尚存的合成触点。开始进入转发后，软停止时间为该阶段开始后的 `seconds - 1` 秒；启动开销计入监护进程的硬期限，无法保证一定有一整秒交接窗口。持指不放会最终触发硬期限强制恢复。
+
+正常交接同时要求已转发状态为空闲、内核输入队列为空，且实时 MT tracking ID 和 BTN_TOUCH 也全部抬起；查询后再次检查队列，避免读取配额结束时误判为空闲。停止信号只请求排空，不停止物理事件读取。监护进程在硬期限约束下等待尾部报告转发完成后才正常退出。
 
 遇设备断开、`SYN_DROPPED`、非法/不完整状态、uinput 写失败或帧超过 250ms 未完成时，worker 退出并释放 fd；不猜测或继续发送未知状态。单帧最多 4096 个事件。以上异常恢复、达到硬期限以及进程被杀时，**不能保证仍按住的手势连续**。手机上的可用恢复入口是向仍连接的控制通道发送 `stop`；控制通道丢失会自行排空，卡死则由本地 watchdog 恢复，最长 120 秒，不依赖电脑维持恢复能力。当前没有 APK 内的手动恢复按钮。
 

@@ -28,6 +28,7 @@ fn exhausted_slots_and_out_of_range_pickup_coordinates_are_rejected() {
             E::new(3, 57, 10),
             E::new(3, 47, 1),
             E::new(3, 57, 11),
+            E::new(1, 330, 1),
             SYN_REPORT,
         ])
         .unwrap();
@@ -44,6 +45,7 @@ fn reserved_virtual_slot_and_id_cannot_be_overwritten_by_physical_contacts() {
         E::new(3, 57, 100),
         E::new(3, 47, 1),
         E::new(3, 57, 99),
+        E::new(1, 330, 1),
         SYN_REPORT,
     ];
     assert_eq!(stream.forward(&frame).unwrap(), frame);
@@ -75,6 +77,13 @@ fn lost_stream_never_accepts_another_pickup_contact() {
 }
 
 #[test]
+fn incomplete_touch_key_state_disables_pickup_contacts() {
+    let mut stream = Stream::new(2, 1000, 2000, 100).unwrap();
+    assert!(stream.forward(&[E::new(1, 330, 1), SYN_REPORT]).is_err());
+    assert!(stream.begin_tap(10, 20).is_err());
+}
+
+#[test]
 fn pickup_contact_does_not_release_real_fingers_and_restores_selected_slot() {
     let mut stream = Stream::new(3, 1000, 2000, 65535).unwrap();
     stream
@@ -82,6 +91,7 @@ fn pickup_contact_does_not_release_real_fingers_and_restores_selected_slot() {
             E::new(3, 57, 7),
             E::new(3, 53, 100),
             E::new(3, 54, 200),
+            E::new(1, 330, 1),
             SYN_REPORT,
         ])
         .unwrap();
@@ -122,6 +132,7 @@ fn last_real_finger_up_keeps_synthetic_contact_down() {
             E::new(3, 57, 7),
             E::new(3, 53, 10),
             E::new(3, 54, 20),
+            E::new(1, 330, 1),
             SYN_REPORT,
         ])
         .unwrap();

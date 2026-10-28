@@ -9,16 +9,37 @@ const USAGE: &str = "paimon-touch-helper inspect\npaimon-touch-helper MODE --dev
 #[derive(Clone, Debug)]
 #[cfg_attr(not(target_os = "android"), allow(dead_code))]
 struct Options {
-    mode: String,
+    mode: Mode,
     device: Option<String>,
     seconds: u64,
 }
 
-fn parse(args: &[String]) -> Result<Options, &'static str> {
-    let mode = args.first().ok_or("missing mode")?.as_str();
-    if !["inspect", "create", "grab", "forward", "merge"].contains(&mode) {
-        return Err("unknown mode");
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum Mode {
+    Inspect,
+    Create,
+    Grab,
+    Forward,
+    Merge,
+}
+impl Mode {
+    fn parse(value: &str) -> Result<Self, &'static str> {
+        match value {
+            "inspect" => Ok(Self::Inspect),
+            "create" => Ok(Self::Create),
+            "grab" => Ok(Self::Grab),
+            "forward" => Ok(Self::Forward),
+            "merge" => Ok(Self::Merge),
+            _ => Err("unknown mode"),
+        }
     }
+    fn forwards(self) -> bool {
+        matches!(self, Self::Forward | Self::Merge)
+    }
+}
+
+fn parse(args: &[String]) -> Result<Options, &'static str> {
+    let mode = Mode::parse(args.first().ok_or("missing mode")?)?;
     let mut device = None;
     let mut seconds = None;
     let mut display_verified = false;
@@ -53,14 +74,14 @@ fn parse(args: &[String]) -> Result<Options, &'static str> {
         }
         index += 1;
     }
-    if mode != "inspect" && (device.is_none() || seconds.is_none()) {
+    if mode != Mode::Inspect && (device.is_none() || seconds.is_none()) {
         return Err("device and seconds are required");
     }
-    if ["forward", "merge"].contains(&mode) && !display_verified {
+    if mode.forwards() && !display_verified {
         return Err("verify virtual touchscreen display association first");
     }
     Ok(Options {
-        mode: mode.into(),
+        mode,
         device,
         seconds: seconds.unwrap_or(5),
     })
