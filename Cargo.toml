@@ -1,0 +1,3 @@
+[workspace]
+members = ["probe-core", "touch-helper"]
+resolver = "2"

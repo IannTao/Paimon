@@ -6,6 +6,8 @@
 
 替代方向及权限实测见 [触控共存输入方案研究](docs/validation/input-coexistence-research.md)；单一虚拟触屏转发方案尚未通过真机验证。
 
+已实现独立的限时 Rust/native 单流代理 helper，含手机本地 watchdog、分阶段能力/创建/抓取/转发入口和受控合成触点；尚未接入现有 APK，也未执行真机抓取或共存验收。构建、协议和恢复限制见 [helper 操作说明](docs/validation/touch-helper.md)。
+
 Rust 控制倒计时、点击次数、单次在途操作和停止状态；Kotlin 提供权限引导、悬浮控制、Shizuku UserService、真实 shell 点击与本地报告。输入路径是 `/system/bin/input touchscreen tap`，并不预设这种路径能与玩家触控共存。
 
 ## 构建
