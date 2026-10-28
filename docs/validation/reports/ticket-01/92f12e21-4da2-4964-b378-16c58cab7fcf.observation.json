@@ -1,0 +1,16 @@
+{
+  "runId": "92f12e21-4da2-4964-b378-16c58cab7fcf",
+  "recordedDate": "2026-10-27",
+  "source": "用户在本轮结束后的会话回复",
+  "gameAccepted": "yes",
+  "gameAcceptedBasis": "用户确认实际取得物品",
+  "itemObtained": "yes",
+  "itemName": null,
+  "itemCount": null,
+  "touchContinuity": "no",
+  "observerNotes": "已结束，中间按住摇杆会被打断，导致需要重新压摇杆",
+  "itemObservation": "拾取到了",
+  "overallGate": "failed",
+  "scope": "当前 Shizuku shell input touchscreen tap 路径，在记录中的基准设备与配置下",
+  "rawReport": "92f12e21-4da2-4964-b378-16c58cab7fcf.json"
+}

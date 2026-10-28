@@ -1,0 +1,15 @@
+{
+  "uid": 2000,
+  "evdevReadWriteErrno": 13,
+  "evdevReadOnlyErrno": 0,
+  "evdevVersion": 65537,
+  "evdevVersionErrno": 0,
+  "unownedGrabReleaseResult": -1,
+  "unownedGrabReleaseErrno": 22,
+  "uinputOpenErrno": 0,
+  "uinputVersion": 5,
+  "uinputVersionErrno": 0,
+  "createdDevice": false,
+  "grabbedDevice": false,
+  "wroteInputEvents": false
+}

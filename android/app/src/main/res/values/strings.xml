@@ -1,0 +1,3 @@
+<resources>
+    <string name="accessibility_description">仅用于触控验证时观察前台窗口；点击由 Shizuku 执行，不读取界面内容，不通过无障碍派发手势。</string>
+</resources>

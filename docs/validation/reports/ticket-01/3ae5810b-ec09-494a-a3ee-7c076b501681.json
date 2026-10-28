@@ -1,0 +1,74 @@
+{
+  "schemaVersion": 1,
+  "runId": "3ae5810b-ec09-494a-a3ee-7c076b501681",
+  "startedAt": "2026-10-27T14:29:25.119309Z",
+  "manufacturer": "nubia",
+  "model": "NX712J",
+  "android": "14",
+  "sdk": 34,
+  "buildDisplay": "MyOS14.5.33_NX712J",
+  "fingerprint": "nubia\/CN_PQ82A11\/PQ82A11:14\/UKQ1.230917.001\/20250225.113840:user\/release-keys",
+  "appVersion": "0.1.3-probe",
+  "inputMethod": "Shizuku UserService shell \/system\/bin\/input touchscreen tap",
+  "inputUid": 2000,
+  "width": 2480,
+  "height": 1116,
+  "rotation": 1,
+  "foregroundCheck": "shell dumpsys resumed Activity; checked again before each tap",
+  "x": 1680,
+  "y": 510,
+  "requestedCount": 10,
+  "countdownMs": 5000,
+  "intervalMs": 1000,
+  "scenario": "持续摇杆",
+  "gameSettings": "画质极低；横屏；UI设置待确认；myos 14.5.33",
+  "gamePackage": "com.miHoYo.Yuanshen",
+  "attempts": [
+    {
+      "requestedAtElapsedMs": 164660475,
+      "x": 1680,
+      "y": 510,
+      "commandResult": "command-returned-zero-not-game-proof",
+      "completedAtElapsedMs": 164660701,
+      "exitCode": 0
+    },
+    {
+      "requestedAtElapsedMs": 164661756,
+      "x": 1680,
+      "y": 510,
+      "commandResult": "command-returned-zero-not-game-proof",
+      "completedAtElapsedMs": 164661981,
+      "exitCode": 0
+    },
+    {
+      "requestedAtElapsedMs": 164662995,
+      "x": 1680,
+      "y": 510,
+      "commandResult": "command-returned-zero-not-game-proof",
+      "completedAtElapsedMs": 164663226,
+      "exitCode": 0
+    },
+    {
+      "requestedAtElapsedMs": 164664316,
+      "x": 1680,
+      "y": 510,
+      "commandResult": "command-returned-zero-not-game-proof",
+      "completedAtElapsedMs": 164664556,
+      "exitCode": 0
+    },
+    {
+      "requestedAtElapsedMs": 164665643,
+      "x": 1680,
+      "y": 510,
+      "commandResult": "command-returned-zero-not-game-proof",
+      "completedAtElapsedMs": 164665874,
+      "exitCode": 0
+    }
+  ],
+  "gameAccepted": "unverified",
+  "itemObtained": "unverified",
+  "touchContinuity": "unverified",
+  "overallGate": "unverified",
+  "endedAt": "2026-10-27T14:29:36.373221Z",
+  "stopReason": "User stopped"
+}

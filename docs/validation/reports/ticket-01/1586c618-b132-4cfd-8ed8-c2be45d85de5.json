@@ -1,0 +1,82 @@
+{
+  "schemaVersion": 1,
+  "runId": "1586c618-b132-4cfd-8ed8-c2be45d85de5",
+  "startedAt": "2026-10-27T14:19:11.789266Z",
+  "manufacturer": "nubia",
+  "model": "NX712J",
+  "android": "14",
+  "sdk": 34,
+  "buildDisplay": "MyOS14.5.33_NX712J",
+  "fingerprint": "nubia\/CN_PQ82A11\/PQ82A11:14\/UKQ1.230917.001\/20250225.113840:user\/release-keys",
+  "appVersion": "0.1.3-probe",
+  "inputMethod": "Shizuku UserService shell \/system\/bin\/input touchscreen tap",
+  "inputUid": 2000,
+  "width": 2480,
+  "height": 1116,
+  "rotation": 1,
+  "foregroundCheck": "shell dumpsys resumed Activity; checked again before each tap",
+  "x": 1680,
+  "y": 510,
+  "requestedCount": 10,
+  "countdownMs": 5000,
+  "intervalMs": 1000,
+  "scenario": "持续摇杆",
+  "gameSettings": "画质极低；横屏；UI设置待确认；myos 14.5.33",
+  "gamePackage": "com.miHoYo.Yuanshen",
+  "attempts": [
+    {
+      "requestedAtElapsedMs": 164047107,
+      "x": 1680,
+      "y": 510,
+      "commandResult": "command-returned-zero-not-game-proof",
+      "completedAtElapsedMs": 164047343,
+      "exitCode": 0
+    },
+    {
+      "requestedAtElapsedMs": 164048404,
+      "x": 1680,
+      "y": 510,
+      "commandResult": "command-returned-zero-not-game-proof",
+      "completedAtElapsedMs": 164048633,
+      "exitCode": 0
+    },
+    {
+      "requestedAtElapsedMs": 164049679,
+      "x": 1680,
+      "y": 510,
+      "commandResult": "command-returned-zero-not-game-proof",
+      "completedAtElapsedMs": 164049896,
+      "exitCode": 0
+    },
+    {
+      "requestedAtElapsedMs": 164050917,
+      "x": 1680,
+      "y": 510,
+      "commandResult": "command-returned-zero-not-game-proof",
+      "completedAtElapsedMs": 164051146,
+      "exitCode": 0
+    },
+    {
+      "requestedAtElapsedMs": 164052169,
+      "x": 1680,
+      "y": 510,
+      "commandResult": "command-returned-zero-not-game-proof",
+      "completedAtElapsedMs": 164052388,
+      "exitCode": 0
+    },
+    {
+      "requestedAtElapsedMs": 164053426,
+      "x": 1680,
+      "y": 510,
+      "commandResult": "command-returned-zero-not-game-proof",
+      "completedAtElapsedMs": 164053660,
+      "exitCode": 0
+    }
+  ],
+  "gameAccepted": "unverified",
+  "itemObtained": "unverified",
+  "touchContinuity": "unverified",
+  "overallGate": "unverified",
+  "endedAt": "2026-10-27T14:19:24.295788Z",
+  "stopReason": "User stopped"
+}
