@@ -30,9 +30,11 @@ pub struct Stream {
     max_x: i32,
     max_y: i32,
     max_id: i32,
-    synthetic: Option<usize>,
+    synthetic: Option<(usize, i32)>,
     healthy: bool,
     real_touch_key: bool,
+    tool_finger: bool,
+    real_tool_finger: i32,
 }
 
 impl Stream {
@@ -56,7 +58,14 @@ impl Stream {
             synthetic: None,
             healthy: true,
             real_touch_key: false,
+            tool_finger: false,
+            real_tool_finger: 0,
         })
+    }
+
+    pub fn with_tool_finger(mut self) -> Self {
+        self.tool_finger = true;
+        self
     }
 
     pub fn real_fingers_up(&self) -> bool {
@@ -76,11 +85,15 @@ impl Stream {
         if self.fingers.iter().all(|f| f.id.is_some()) {
             return Err("all slots occupied");
         }
-        // One extra virtual slot and ID are never used by physical events.
+        // The virtual slot is reserved; the ID must remain within advertised
+        // ranges because Android/kernel may normalize the tracking-ID maximum.
         let slot = self.fingers.len();
-        let id = self.max_id + 1;
-        self.synthetic = Some(slot);
-        Ok(vec![
+        let id = (0..=self.max_id)
+            .rev()
+            .find(|id| self.fingers.iter().all(|finger| finger.id != Some(*id)))
+            .ok_or("no free tracking ID")?;
+        self.synthetic = Some((slot, id));
+        let mut output = vec![
             Event::new(EV_ABS, ABS_MT_SLOT, slot as i32),
             Event::new(EV_ABS, ABS_MT_TRACKING_ID, id),
             Event::new(EV_ABS, ABS_MT_POSITION_X, x),
@@ -88,20 +101,34 @@ impl Stream {
             Event::new(EV_KEY, BTN_TOUCH, 1),
             Event::new(EV_ABS, ABS_MT_SLOT, self.selected as i32),
             SYN_REPORT,
-        ])
+        ];
+        if self.tool_finger {
+            output.insert(
+                output.len() - 1,
+                Event::new(EV_KEY, BTN_TOOL_FINGER, i32::from(self.real_fingers_up())),
+            );
+        }
+        Ok(output)
     }
 
     pub fn end_tap(&mut self) -> Vec<Event> {
-        let Some(slot) = self.synthetic.take() else {
+        let Some((slot, _)) = self.synthetic.take() else {
             return vec![];
         };
-        vec![
+        let mut output = vec![
             Event::new(EV_ABS, ABS_MT_SLOT, slot as i32),
             Event::new(EV_ABS, ABS_MT_TRACKING_ID, -1),
             Event::new(EV_KEY, BTN_TOUCH, i32::from(!self.real_fingers_up())),
             Event::new(EV_ABS, ABS_MT_SLOT, self.selected as i32),
             SYN_REPORT,
-        ]
+        ];
+        if self.tool_finger {
+            output.insert(
+                output.len() - 1,
+                Event::new(EV_KEY, BTN_TOOL_FINGER, self.real_tool_finger),
+            );
+        }
+        output
     }
 
     pub fn forward(&mut self, frame: &[Event]) -> Result<Vec<Event>, &'static str> {
@@ -122,11 +149,18 @@ impl Stream {
         let mut fingers = self.fingers.clone();
         let mut selected = self.selected;
         let mut touch_key = self.real_touch_key;
+        let mut tool_finger = self.real_tool_finger;
         for event in &frame[..frame.len() - 1] {
             match (event.kind, event.code, event.value) {
                 (EV_SYN, _, _) => return Err("lost or unexpected synchronization"),
                 (EV_KEY, BTN_TOUCH, value @ (0 | 1)) => touch_key = value == 1,
                 (EV_KEY, BTN_TOUCH, _) => return Err("invalid touch key state"),
+                (EV_KEY, BTN_TOOL_FINGER, value @ (0 | 1)) if self.tool_finger => {
+                    tool_finger = value
+                }
+                (EV_KEY, BTN_TOOL_FINGER, _) => {
+                    return Err("unsupported or invalid finger tool state")
+                }
                 (EV_ABS, ABS_MT_SLOT, slot) => {
                     selected = usize::try_from(slot).map_err(|_| "negative slot")?;
                     if selected >= fingers.len() {
@@ -158,18 +192,41 @@ impl Stream {
         if touch_key != fingers.iter().any(|f| f.id.is_some()) {
             return Err("touch key and MT slots disagree");
         }
+        let mut prefix = vec![];
+        if self.synthetic.is_some_and(|(_, id)| {
+            frame.iter().any(|event| {
+                (event.kind, event.code, event.value) == (EV_ABS, ABS_MT_TRACKING_ID, id)
+            })
+        }) {
+            // Finish the pickup before forwarding the conflicting real DOWN.
+            // Use the previous real state for this release frame.
+            prefix = self.end_tap();
+        }
         self.fingers = fingers;
         self.selected = selected;
         self.real_touch_key = touch_key;
-        Ok(frame
+        self.real_tool_finger = tool_finger;
+        let mut output: Vec<_> = frame
             .iter()
             .map(|event| {
                 if self.synthetic.is_some() && (event.kind, event.code) == (EV_KEY, BTN_TOUCH) {
                     Event::new(EV_KEY, BTN_TOUCH, 1)
+                } else if self.synthetic.is_some()
+                    && (event.kind, event.code) == (EV_KEY, BTN_TOOL_FINGER)
+                {
+                    Event::new(EV_KEY, BTN_TOOL_FINGER, i32::from(self.real_fingers_up()))
                 } else {
                     *event
                 }
             })
-            .collect())
+            .collect();
+        if self.synthetic.is_some() && self.tool_finger {
+            output.insert(
+                output.len() - 1,
+                Event::new(EV_KEY, BTN_TOOL_FINGER, i32::from(self.real_fingers_up())),
+            );
+        }
+        prefix.extend(output);
+        Ok(prefix)
     }
 }

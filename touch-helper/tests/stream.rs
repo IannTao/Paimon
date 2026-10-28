@@ -1,6 +1,73 @@
 use paimon_touch_helper::{Event as E, Stream, SYN_REPORT};
 
 #[test]
+fn pickup_id_stays_in_range_and_yields_to_a_real_tracking_id() {
+    let mut stream = Stream::new(3, 1000, 2000, 100).unwrap();
+    stream
+        .forward(&[E::new(3, 57, 7), E::new(1, 330, 1), SYN_REPORT])
+        .unwrap();
+    assert!(stream
+        .begin_tap(30, 40)
+        .unwrap()
+        .contains(&E::new(3, 57, 100)));
+    let frame = [E::new(3, 47, 1), E::new(3, 57, 100), SYN_REPORT];
+    let mut expected = vec![
+        E::new(3, 47, 3),
+        E::new(3, 57, -1),
+        E::new(1, 330, 1),
+        E::new(3, 47, 0),
+        SYN_REPORT,
+    ];
+    expected.extend(frame);
+    assert_eq!(stream.forward(&frame).unwrap(), expected);
+    assert!(stream.end_tap().is_empty());
+}
+
+#[test]
+fn pickup_updates_single_finger_tool_key_and_restores_physical_key_on_release() {
+    let mut stream = Stream::new(3, 1000, 2000, 100).unwrap().with_tool_finger();
+    let real_down = [
+        E::new(3, 57, 7),
+        E::new(1, 325, 1),
+        E::new(1, 330, 1),
+        SYN_REPORT,
+    ];
+    assert_eq!(stream.forward(&real_down).unwrap(), real_down);
+    assert!(stream
+        .begin_tap(300, 400)
+        .unwrap()
+        .contains(&E::new(1, 325, 0)));
+    assert!(stream.end_tap().contains(&E::new(1, 325, 1)));
+}
+
+#[test]
+fn last_real_finger_up_leaves_the_synthetic_finger_tool_present() {
+    let mut stream = Stream::new(3, 1000, 2000, 100).unwrap().with_tool_finger();
+    stream
+        .forward(&[
+            E::new(3, 57, 7),
+            E::new(1, 325, 1),
+            E::new(1, 330, 1),
+            SYN_REPORT,
+        ])
+        .unwrap();
+    stream.begin_tap(300, 400).unwrap();
+    let output = stream
+        .forward(&[
+            E::new(3, 57, -1),
+            E::new(1, 325, 0),
+            E::new(1, 330, 0),
+            SYN_REPORT,
+        ])
+        .unwrap();
+    assert!(output
+        .iter()
+        .filter(|e| e.kind == 1 && e.code == 325)
+        .all(|e| e.value == 1));
+    assert!(stream.end_tap().contains(&E::new(1, 325, 0)));
+}
+
+#[test]
 fn real_two_finger_frame_is_forwarded_unchanged() {
     let mut stream = Stream::new(3, 1000, 2000, 65535).unwrap();
     let frame = vec![
@@ -42,7 +109,7 @@ fn reserved_virtual_slot_and_id_cannot_be_overwritten_by_physical_contacts() {
     stream.begin_tap(20, 30).unwrap();
     let frame = [
         E::new(3, 47, 0),
-        E::new(3, 57, 100),
+        E::new(3, 57, 98),
         E::new(3, 47, 1),
         E::new(3, 57, 99),
         E::new(1, 330, 1),
@@ -99,7 +166,7 @@ fn pickup_contact_does_not_release_real_fingers_and_restores_selected_slot() {
         stream.begin_tap(700, 800).unwrap(),
         vec![
             E::new(3, 47, 3),
-            E::new(3, 57, 65536),
+            E::new(3, 57, 65535),
             E::new(3, 53, 700),
             E::new(3, 54, 800),
             E::new(1, 330, 1),

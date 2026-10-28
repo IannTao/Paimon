@@ -16,6 +16,7 @@ struct Caps {
     max_y: i32,
     max_id: i32,
     selected: i32,
+    tool_finger: i32,
     axes: [i32; 64],
 }
 
@@ -141,6 +142,9 @@ pub fn run(options: Options) -> Result<i32, Box<dyn Error>> {
         println!("{{\"event\":\"grabbed\",\"exclusive\":true}}");
     }
     let mut stream = Stream::new(caps.slots as usize, caps.max_x, caps.max_y, caps.max_id)?;
+    if caps.tool_finger != 0 {
+        stream = stream.with_tool_finger();
+    }
     if active {
         check(unsafe { ph_seed(device.0, &caps) })?;
         stream.forward(&[Event::new(EV_ABS, ABS_MT_SLOT, caps.selected), SYN_REPORT])?;

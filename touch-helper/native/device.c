@@ -18,7 +18,7 @@
 struct event { uint16_t kind, code; int32_t value; };
 struct caps {
     char name[80];
-    int32_t slots, max_x, max_y, max_id, selected;
+    int32_t slots, max_x, max_y, max_id, selected, tool_finger;
     int32_t axes[ABS_CNT]; /* INT_MIN: absent; otherwise synthetic initial value */
 };
 struct device {
@@ -96,8 +96,9 @@ static int read_caps(struct device *d, struct caps *c) {
     }
     /* Contact-count tool keys would require additional merged count semantics. */
     for (int key = BTN_TOOL_PEN; key <= BTN_TOOL_QUADTAP; ++key) {
-        if (key != BTN_TOUCH && bit(d->keys, key)) { errno = ENOTSUP; return failure("unsupported_tool_count_keys"); }
+        if (key != BTN_TOUCH && key != BTN_TOOL_FINGER && bit(d->keys, key)) { errno = ENOTSUP; return failure("unsupported_tool_count_keys"); }
     }
+    c->tool_finger = bit(d->keys, BTN_TOOL_FINGER);
     for (int i = 0; i < ABS_CNT; ++i) {
         c->axes[i] = INT_MIN;
         if (!bit(d->abs_bits, i)) continue;
@@ -154,7 +155,7 @@ int ph_create(struct device *d) {
         struct uinput_abs_setup setup = { .code = (uint16_t)i, .absinfo = d->axes[i] };
         setup.absinfo.value = setup.absinfo.minimum > 0 ? setup.absinfo.minimum :
                               (setup.absinfo.maximum < 0 ? setup.absinfo.maximum : 0);
-        if (i == ABS_MT_SLOT || i == ABS_MT_TRACKING_ID) ++setup.absinfo.maximum;
+        if (i == ABS_MT_SLOT) ++setup.absinfo.maximum;
         CHECK(ioctl(d->virtual, UI_ABS_SETUP, &setup));
     }
     for (int i = 0; i < MSC_CNT; ++i) {
@@ -177,7 +178,7 @@ static int idle_state(struct device *d, const struct caps *c) {
     for (int i = 1; i <= c->slots; ++i) if (slots[i] != -1) return 0;
     unsigned char keys[(KEY_CNT + 7) / 8] = {0};
     CHECK(ioctl(d->physical, EVIOCGKEY(sizeof(keys)), keys));
-    return bit(keys, BTN_TOUCH) ? 0 : 1;
+    return bit(keys, BTN_TOUCH) || (c->tool_finger && bit(keys, BTN_TOOL_FINGER)) ? 0 : 1;
 }
 
 static int all_up(struct device *d, const struct caps *c) {
