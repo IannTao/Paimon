@@ -4,7 +4,7 @@ mod android;
 use paimon_touch_helper::supervisor::{supervise, Outcome};
 use std::{process::Command, time::Duration};
 
-const USAGE: &str = "paimon-touch-helper inspect\npaimon-touch-helper MODE --device /dev/input/eventN --seconds 1..120 [--display-verified]\nMODE: inspect | create | grab | forward | merge\nforward/merge require --display-verified after create-only dumpsys verification.\nstdin: permit (1s lease), tap RAW_X RAW_Y, stop. Tap duration: 50ms; maximum: 30.\nstop/EOF/permit expiry drain until fingers lift; watchdog kills at hard deadline.";
+const USAGE: &str = "paimon-touch-helper inspect\npaimon-touch-helper MODE --device /dev/input/eventN --seconds 1..120 [--display-verified]\nMODE: inspect | create | grab | forward | merge\nforward/merge require --display-verified after create-only dumpsys verification.\nstdin: permit (1s lease), tap RAW_X RAW_Y, tap-if COUNT RAW_X RAW_Y, stop. Tap duration: 50ms; maximum: 30.\nstop/EOF/permit expiry drain until fingers lift; watchdog kills at hard deadline.";
 
 #[derive(Clone, Debug)]
 #[cfg_attr(not(target_os = "android"), allow(dead_code))]

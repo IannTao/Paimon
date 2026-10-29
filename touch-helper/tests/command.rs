@@ -1,6 +1,15 @@
 use paimon_touch_helper::Command;
 
 #[test]
+fn experiment_tap_can_require_two_current_real_contacts() {
+    assert_eq!(
+        Command::parse("tap-if 2 100 200").unwrap(),
+        Command::TapIfContacts(2, 100, 200)
+    );
+    assert!(Command::parse("tap-if 33 100 200").is_err());
+}
+
+#[test]
 fn pickup_requires_a_live_permit_and_has_a_bounded_count() {
     let mut gate = paimon_touch_helper::Gate::default();
     assert!(!gate.allow_tap(0));

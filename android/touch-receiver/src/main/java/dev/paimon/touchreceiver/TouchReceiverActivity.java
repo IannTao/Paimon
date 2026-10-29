@@ -80,6 +80,11 @@ public final class TouchReceiverActivity extends Activity {
         ReceiverView() { super(TouchReceiverActivity.this); start(); }
 
         private void start() {
+            if (!contacts.isEmpty()) {
+                status = "请先抬起全部手指，再按音量加开始新一轮";
+                invalidate();
+                return;
+            }
             records.clear(); contacts.clear();
             stopRequested = false; truncated = false; cancels = 0; events = 0;
             maximumPointers = 0; maximumDispatchDelayMs = 0; lastDevice = -1;
@@ -147,6 +152,7 @@ public final class TouchReceiverActivity extends Activity {
         @Override public boolean performClick() { super.performClick(); return true; }
 
         private void requestStop() {
+            if (!recording) return;
             stopRequested = true;
             if (contacts.isEmpty()) save("volume_down");
             else status = "请抬起全部手指，随后自动保存";

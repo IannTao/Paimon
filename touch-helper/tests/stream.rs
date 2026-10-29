@@ -1,6 +1,20 @@
 use paimon_touch_helper::{Event as E, Stream, SYN_REPORT};
 
 #[test]
+fn third_contact_test_does_not_click_after_a_real_finger_has_lifted() {
+    let mut stream = Stream::new(3, 1000, 2000, 100).unwrap();
+    stream
+        .forward(&[E::new(3, 57, 7), E::new(1, 330, 1), SYN_REPORT])
+        .unwrap();
+    assert!(stream.begin_tap_if_contacts(2, 300, 400).is_err());
+    assert!(stream.end_tap().is_empty());
+    stream
+        .forward(&[E::new(3, 47, 1), E::new(3, 57, 8), SYN_REPORT])
+        .unwrap();
+    assert!(stream.begin_tap_if_contacts(2, 300, 400).is_ok());
+}
+
+#[test]
 fn pickup_id_stays_in_range_and_yields_to_a_real_tracking_id() {
     let mut stream = Stream::new(3, 1000, 2000, 100).unwrap();
     stream
@@ -144,10 +158,40 @@ fn lost_stream_never_accepts_another_pickup_contact() {
 }
 
 #[test]
-fn incomplete_touch_key_state_disables_pickup_contacts() {
+fn captured_key_only_frame_keeps_forwarding_but_blocks_pickup_until_consistent() {
     let mut stream = Stream::new(2, 1000, 2000, 100).unwrap();
-    assert!(stream.forward(&[E::new(1, 330, 1), SYN_REPORT]).is_err());
+    // Captured on goodix_ts after all slots had been released, 2026-10-29.
+    let key_only = [E::new(1, 330, 1), SYN_REPORT];
+    assert_eq!(stream.forward(&key_only).unwrap(), key_only);
     assert!(stream.begin_tap(10, 20).is_err());
+    let real_down = [E::new(3, 57, 7), SYN_REPORT];
+    assert_eq!(stream.forward(&real_down).unwrap(), real_down);
+    assert!(stream.begin_tap(10, 20).is_ok());
+}
+
+#[test]
+fn key_slot_disagreement_releases_pickup_before_forwarding_the_source_frame() {
+    let mut stream = Stream::new(2, 1000, 2000, 100).unwrap();
+    stream
+        .forward(&[E::new(3, 57, 7), E::new(1, 330, 1), SYN_REPORT])
+        .unwrap();
+    stream.begin_tap(10, 20).unwrap();
+    let key_up = [E::new(1, 330, 0), SYN_REPORT];
+    assert_eq!(
+        stream.forward(&key_up).unwrap(),
+        vec![
+            E::new(3, 47, 2),
+            E::new(3, 57, -1),
+            E::new(1, 330, 1),
+            E::new(3, 47, 0),
+            SYN_REPORT,
+            E::new(1, 330, 0),
+            SYN_REPORT,
+        ]
+    );
+    assert!(stream.end_tap().is_empty());
+    assert!(stream.begin_tap(10, 20).is_err());
+    assert_eq!(stream.real_contact_count(), 1);
 }
 
 #[test]

@@ -83,6 +83,9 @@ impl Stream {
         if !self.healthy {
             return Err("stream state is unknown");
         }
+        if self.real_touch_key == self.real_fingers_up() {
+            return Err("touch key and MT slots disagree; pickup suspended");
+        }
         if self.synthetic.is_some() {
             return Err("tap already active");
         }
@@ -118,6 +121,18 @@ impl Stream {
         Ok(output)
     }
 
+    pub fn begin_tap_if_contacts(
+        &mut self,
+        expected: usize,
+        x: i32,
+        y: i32,
+    ) -> Result<Vec<Event>, &'static str> {
+        if self.real_contact_count() != expected {
+            return Err("real contact count does not match experiment");
+        }
+        self.begin_tap(x, y)
+    }
+
     pub fn end_tap(&mut self) -> Vec<Event> {
         let Some((slot, _)) = self.synthetic.take() else {
             return vec![];
@@ -125,7 +140,7 @@ impl Stream {
         let mut output = vec![
             Event::new(EV_ABS, ABS_MT_SLOT, slot as i32),
             Event::new(EV_ABS, ABS_MT_TRACKING_ID, -1),
-            Event::new(EV_KEY, BTN_TOUCH, i32::from(!self.real_fingers_up())),
+            Event::new(EV_KEY, BTN_TOUCH, i32::from(self.real_touch_key)),
             Event::new(EV_ABS, ABS_MT_SLOT, self.selected as i32),
             SYN_REPORT,
         ];
@@ -196,16 +211,17 @@ impl Stream {
                 return Err("duplicate tracking ID");
             }
         }
-        if touch_key != fingers.iter().any(|f| f.id.is_some()) {
-            return Err("touch key and MT slots disagree");
-        }
         let mut prefix = vec![];
+        let touch_disagrees = touch_key != fingers.iter().any(|finger| finger.id.is_some());
         if self.synthetic.is_some_and(|(_, id)| {
-            frame.iter().any(|event| {
-                (event.kind, event.code, event.value) == (EV_ABS, ABS_MT_TRACKING_ID, id)
-            })
+            touch_disagrees
+                || frame.iter().any(|event| {
+                    (event.kind, event.code, event.value) == (EV_ABS, ABS_MT_TRACKING_ID, id)
+                })
         }) {
-            // Finish the pickup before forwarding the conflicting real DOWN.
+            // Finish the pickup before a conflicting ID or key/slot mismatch.
+            // A complete source key-only frame is not proof of lost MT events:
+            // preserve it, but suspend pickup until key and slots agree again.
             // Use the previous real state for this release frame.
             prefix = self.end_tap();
         }

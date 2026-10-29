@@ -234,13 +234,22 @@ pub fn run(options: Options) -> Result<i32, Box<dyn Error>> {
                 let parsed = std::str::from_utf8(&line)
                     .ok()
                     .and_then(|line| Command::parse(line).ok());
+                let expected_contacts = match &parsed {
+                    Some(Command::TapIfContacts(count, _, _)) => Some(*count),
+                    _ => None,
+                };
                 match parsed {
-                    Some(Command::Tap(x, y))
+                    Some(Command::Tap(x, y) | Command::TapIfContacts(_, x, y))
                         if options.mode == Mode::Merge
                             && now_ms >= next_tap
                             && gate.allow_tap(now_ms) =>
                     {
-                        match stream.begin_tap(x, y) {
+                        let tap = if let Some(expected) = expected_contacts {
+                            stream.begin_tap_if_contacts(expected, x, y)
+                        } else {
+                            stream.begin_tap(x, y)
+                        };
+                        match tap {
                             Ok(mut output) => {
                                 let extra: Vec<_> = (ABS_MT_TOUCH_MAJOR..=ABS_MT_TOOL_Y)
                                     .filter(|code| {
@@ -278,7 +287,7 @@ pub fn run(options: Options) -> Result<i32, Box<dyn Error>> {
                     Some(command @ (Command::Permit | Command::Stop)) => {
                         gate.apply(command, now_ms)
                     }
-                    Some(Command::Tap(_, _)) => println!(
+                    Some(Command::Tap(_, _) | Command::TapIfContacts(_, _, _)) => println!(
                         "{{\"event\":\"tap_rejected\",\"reason\":\"mode, permit, or rate limit\"}}"
                     ),
                     None => {

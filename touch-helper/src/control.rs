@@ -2,6 +2,7 @@
 pub enum Command {
     Permit,
     Tap(i32, i32),
+    TapIfContacts(usize, i32, i32),
     Stop,
 }
 
@@ -15,7 +16,18 @@ impl Command {
                 x.parse().map_err(|_| "invalid X")?,
                 y.parse().map_err(|_| "invalid Y")?,
             )),
-            _ => Err("expected permit, tap RAW_X RAW_Y, or stop"),
+            ["tap-if", count, x, y] => {
+                let count: usize = count.parse().map_err(|_| "invalid contact count")?;
+                if count > 32 {
+                    return Err("contact count must be 0..32");
+                }
+                Ok(Self::TapIfContacts(
+                    count,
+                    x.parse().map_err(|_| "invalid X")?,
+                    y.parse().map_err(|_| "invalid Y")?,
+                ))
+            }
+            _ => Err("expected permit, tap RAW_X RAW_Y, tap-if COUNT RAW_X RAW_Y, or stop"),
         }
     }
 }
