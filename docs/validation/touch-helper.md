@@ -1,6 +1,6 @@
 # 限时单流触屏代理 helper
 
-实现日期：2026-10-28，验证延续至 2026-10-29。对应 [输入方案研究](input-coexistence-research.md) 的最小验证顺序，交付独立 native helper，尚未接入现有 APK / Shizuku UserService。现有 shell tap 路径及失败证据保持不变。已取得创建/销毁、显示识别、watchdog、grab 和转发证据，以及一次真实单指加合成触点的观察；后续捕获仅含 BTN_TOUCH 的物理帧，修正将键/槽暂不一致误判为状态丢失的问题，待真机复测。**第三触点及游戏门槛未通过**。证据见 [阶段验证记录](touch-helper-device-validation.md)。
+实现日期：2026-10-28，验证延续至 2026-10-29。对应 [输入方案研究](input-coexistence-research.md) 的最小验证顺序，交付独立 native helper，尚未接入现有 APK / Shizuku UserService。现有 shell tap 路径及失败证据保持不变。已取得创建/销毁、显示识别、watchdog、grab 和转发证据；key-only源帧退出问题已修复，收尾加入100ms空闲观察后，三次单点击接收器对照原双指连续、0CANCEL、正常UP。**完整游戏、重复点击及异常门槛未通过**。用户已停止继续01真机测试、转入02开发。证据见 [阶段验证记录](touch-helper-device-validation.md)。
 
 ## 构建与自动验证
 
@@ -23,6 +23,8 @@ cargo clippy --workspace --all-targets --locked --offline -- -D warnings
 正常交接同时要求已转发状态为空闲、内核输入队列为空，且实时 MT tracking ID 和 BTN_TOUCH 也全部抬起；查询后再次检查队列，避免读取配额结束时误判为空闲。停止信号只请求排空，不停止物理事件读取。监护进程在硬期限约束下等待尾部报告转发完成后才正常退出。
 
 遇设备断开、`SYN_DROPPED`、非法/不完整状态、uinput 写失败或帧超过 250ms 未完成时，worker 退出并释放 fd；不猜测或继续发送未知状态。单帧最多 4096 个事件。完整帧内 BTN_TOUCH 与 MT 槽暂不一致时保留源帧转发，禁止新合成；已有合成先结束再转发，状态重新一致后才可再合成。正常退出仍检查物理槽、键与待读队列均空闲。以上异常恢复、达到硬期限以及进程被杀时，**不能保证仍按住的手势连续**。手机上的可用恢复入口是向仍连接的控制通道发送 `stop`；控制通道丢失会自行排空，卡死则由本地 watchdog 恢复，最长 120 秒，不依赖电脑维持恢复能力。当前没有 APK 内的手动恢复按钮。
+
+forward/merge 正常排空后还会观察约100ms连续源空闲，期间继续转发并发送心跳；源帧到来或实时空闲条件不满足时重新计时。这是针对真机最后UP被CANCEL替代的候选时序缓解，不是Android消费确认，不延长120秒硬期限。系统持续产生源帧时可能最终走硬期限恢复，不保证所有运行均正常退出。三指系统分屏曾导致取消，实验前需关闭该系统手势并核对窗口尺寸。收尾判定可用 `./scripts/assert-touch-receiver.ps1 -Path <报告> -MinPointers 3`；它只检查完整保存、最低最大触点数、无CANCEL和最终UP，不能替代原pointerId与history的完整连续性核验。
 
 ## 分阶段入口
 

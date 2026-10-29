@@ -1,0 +1,18 @@
+[
+  {
+    "phase": "touchDrainTraceStart",
+    "output": "\u001b[?9001h\u001b[?1004h\u001b[?25l\u001b[2J\u001b[m\u001b[H\u001b]0;C:\\Program Files\\PowerShell\\7\\pwsh.exe\u0007\u001b[?25h{\"event\":\"capabilities\",\"path\":\"/dev/input/event6\",\"name\":\"goodix_ts\",\"slots\":10,\"rawMaxX\":17856,\"rawMaxY\":39680,\"trackingMax\":65535}\r\n{\"event\":\"device_metadata\",\"properties\":[1],\"keys\":[116,143,325,330,354],\"axes\":[{\"code\":0,\"minimum\":0,\"maximum\":17856,\"resolution\":0,\"fuzz\":0,\"flat\":0},{\"code\":1,\"minimum\":0,\"maximum\":39680,\"resolution\":0,\"fuzz\":0,\"flat\":0},{\"code\":47,\"minimum\":0,\"maximum\":9,\"resolution\":0,\"fuzz\":0,\"flat\":0},{\"code\":48,\"minimum\":0,\"maximum\":4080,\"resolution\":0,\"fuzz\":0,\"flat\":0},{\"code\":53,\"minimum\":0,\"maximum\":17856,\"resolution\":0,\"fuzz\":0,\"flat\":0},{\"code\":54,\"minimum\":0,\"maximum\":39680,\"resolution\":0,\"fuzz\":0,\"flat\":0},{\"code\":57,\"minimum\":0,\"maximum\":65535,\"resolution\":0,\"fuzz\":0,\"flat\":0}]}\r\n{\"event\":\"created\",\"sentTouch\":false,\"displayAssociation\":\"unverified\"}\r\n{\"event\":\"grabbed\",\"exclusive\":true}\r\n"
+  },
+  {
+    "phase": "touchDrainTraceContacts",
+    "output": ""
+  },
+  {
+    "phase": "touchDrainTraceStop",
+    "output": "[DEBUG-touch-drain] source_ms=122117177; frame=[Event { kind: 3, code: 47, value: 0 }, Event { kind: 3, code: 57, value: 1960 }, Event { kind: 1, code: 330, value: 1 }, Event { kind: 3, code: 53, value: 8757 }, Event { kind: 3, code: 54, value: 13930 }, Event { kind: 3, code: 48, value: 63 }, Event { kind: 0, code: 0, value: 0 }]\r\n{\"event\":\"real_contacts\",\"count\":1}\r\n[DEBUG-touch-drain] source_ms=122117196; frame=[Event { kind: 3, code: 47, value: 1 }, Event { kind: 3, code: 57, value: 1961 }, Event { kind: 3, code: 53, value: 5990 }, Event { kind: 3, code: 54, value: 22416 }, Event { kind: 3, code: 48, value: 46 }, Event { kind: 0, code: 0, value: 0 }]\r\n{\"event\":\"real_contacts\",\"count\":2}\r\nstop\r\n"
+  },
+  {
+    "phase": "touchDrainTraceEnd",
+    "output": "[DEBUG-touch-drain] source_ms=122136888; frame=[Event { kind: 3, code: 57, value\r\n\u001b[23;80He: -1 }, Event { kind: 0,\u001b[1Ccode: 0, value: 0 }]\r\n{\"event\":\"real_contacts\",\"count\":1}\r\n[DEBUG-touch-drain] source_ms=122138731; frame=[Event { kind: 3, code: 57, value\r\n\u001b[23;80He: -1 }, Event { kind: 1, code: 330, value: 0 }, Event { kind: 0, code: 0, value:\r\n\u001b[23;80H: 0 }]\r\n[DEBUG-touch-drain] destroy_ms=122138732\r\n{\"event\":\"real_contacts\",\"count\":0}\r\n{\"event\":\"destroyed\"}\r\n{\"event\":\"closed\",\"coexistence\":\"unverified\"}\r\n\u001b[?9001l\u001b[?1004l"
+  }
+]

@@ -161,6 +161,7 @@ pub fn run(options: Options) -> Result<i32, Box<dyn Error>> {
     let mut tap_until = None;
     let mut next_tap = 0;
     let mut reported_contacts = 0;
+    let mut handover_idle_since = None;
     loop {
         let now_ms = start.elapsed().as_millis() as u64;
         if start.elapsed() >= soft_limit {
@@ -191,6 +192,7 @@ pub fn run(options: Options) -> Result<i32, Box<dyn Error>> {
                     return Err("physical frame exceeds 4096 events".into());
                 }
                 if event == SYN_REPORT {
+                    handover_idle_since = None;
                     device.write(&stream.forward(&frame)?)?;
                     let contacts = stream.real_contact_count();
                     if contacts != reported_contacts {
@@ -301,8 +303,16 @@ pub fn run(options: Options) -> Result<i32, Box<dyn Error>> {
                 && (options.mode == Mode::Create
                     || check(unsafe { ph_handover_ready(device.0, &caps) })? == 1)
             {
-                device.write(&stream.end_tap())?;
-                break;
+                // uinput write completion does not acknowledge InputReader's
+                // consumption of the final UP. Keep forwarding during a short
+                // idle window before removal; new source frames reset it.
+                let idle_since = handover_idle_since.get_or_insert_with(Instant::now);
+                if !active || idle_since.elapsed() >= Duration::from_millis(100) {
+                    device.write(&stream.end_tap())?;
+                    break;
+                }
+            } else {
+                handover_idle_since = None;
             }
         }
         if Instant::now() >= next_heartbeat {

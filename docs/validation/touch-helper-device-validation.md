@@ -6,7 +6,7 @@
 
 最新进展：已捕获触发 `touch key and MT slots disagree` 的完整帧（仅 BTN_TOUCH=1 + SYN_REPORT），通过失败回归修复代理主动退出问题，修复版纯转发复测 1340 个事件、0 CANCEL。三指系统分屏手势已由用户关闭，恢复了 2480×1116 全屏；现已完成一次真实双指持续按住加合成第三触点，原指针保持连续、0 CANCEL。双指持续拖动、重复及异常门槛、游戏验收尚待执行。
 
-当前新阻塞：后续双指拖动实验在最终抬手阶段出现 1 CANCEL，虽晚于第三触点结束约 13.7 秒，整轮仍未通过。正在区分正常关闭交接时机、系统手势和物理源流问题；不把用户主观连续报告代替日志判定。
+收尾问题曾在两轮拖动实验复现。加入100ms空闲观察后，三次单点击接收器对照均0CANCEL（一次诊断、两次正式版），详细边界见下文。2026-10-29用户明确停止继续01真机测试，转入02开发；全部代理已正常退出，不再安排手机操作。工单01仍未完成游戏、重复点击及异常门槛，不标为通过。
 
 ## 已执行阶段
 
@@ -62,6 +62,24 @@
 
 收尾对照：[双指纯转发](reports/touch-helper-2026-10-28/forward-manual-close-1793280823869.jsonl) 1457 个事件、deviceId=24、0 CANCEL，原指针按 POINTER_UP、UP 正常结束，保存后才发送 stop，[helper](reports/touch-helper-2026-10-28/forward-manual-close-helper.jsonl) 正常退出。随后无人触摸时，在接收器内执行三次独立的 `permit + tap-if 0 + stop` 快速收尾实验，[日志](reports/touch-helper-2026-10-28/drain-auto-1793281008452.jsonl) 为 deviceId=25/26/27 各一组 DOWN/UP、共 6 事件、0 CANCEL，[三次 helper](reports/touch-helper-2026-10-28/drain-auto-helper.jsonl) 均退出 0。三次点击因紧跟 stop 提前结束，不能当作正常 50ms 点击或游戏通过，只用于销毁时机诊断。本组未复现，不能确认立即销毁即为根因，故未添加延时掩盖问题。后续 dumpsys input 显示内置 UnwantedInteractionBlocker 的 mEnablePalmRejection=0、flag=0、mPalmRejectors=None；这不能排除厂商系统手势或驱动行为。
 
+增加仅记录 MT tracking/BTN_TOUCH 完整帧和销毁单调时间的临时诊断后，纯转发中在双指仍按住时发送 stop，再提示依次抬手。[终端原始块](reports/touch-helper-2026-10-28/drain-trace-helper.json) 保留 PTY 控制符与折行，没有把终端文本当作机器事件 JSON。记录首指 MT 退出时刻 122136888ms，末指退出帧在 122138731ms（含 tracking=-1 与 BTN_TOUCH=0），销毁为 122138732ms。[接收器](reports/touch-helper-2026-10-28/drain-trace-1793281234711.jsonl) 203 个事件、deviceId=28、max2、0 CANCEL、未截断、正常保存，最终 UP 的 eventTime=122138731ms、receivedUptime=122138737ms。再次未复现；因此立即销毁并非必然取消，仍未确定早前 1 CANCEL 的根因。诊断版 SHA-256 为 `453063C4F27D9C740CB17EF31B768DF3B06DA9BC18DAFB9B0E3A6853A128B19F`。下一步只改变两指抬起间隔为接近同时，继续捕获源帧，暂不改变交接逻辑。
+
+接近同时抬指对照同样未复现：[源帧/销毁时间](reports/touch-helper-2026-10-28/drain-simultaneous-helper.json) 中两指在 122328448ms、122328468ms 退出，相隔 20ms，末帧同样包含 tracking=-1 与 BTN_TOUCH=0，销毁为 122328469ms；[接收器](reports/touch-helper-2026-10-28/drain-simultaneous-1793281449665.jsonl) 369 个事件、deviceId=29、max2、0 CANCEL、无截断、正常保存，最终 UP eventTime=122328468ms、receivedUptime=122328472ms。该间隔与此前失败轮的 20ms 相当，削弱“仅由抬指间隔导致取消”的假设，不能排除其它系统/源流因素。下一步回到双指拖动加条件合成的原场景。
+
+第一次回到原场景时，helper 确实执行一次条件点击并正常退出，但接收器没有开启新记录，屏幕仍显示上一份已保存文件；[helper 原始块](reports/touch-helper-2026-10-28/merge-moving-unrecorded-helper.json) 仅作为执行记录，不计连续性结论。此后改为通过单独 ADB 音量键开启/保存，开启后核对屏幕为“记录中”和事件数清零，再提示用户触摸。
+
+第二次原场景已重现：[接收器](reports/touch-helper-2026-10-28/merge-moving-trace-1793281715506.jsonl) 3413 个事件、6447 条 history，deviceId=31，合成 pointer2 在 122574870–122574932ms 持续 62ms，原0/1随后继续同 downTime 移动约12秒；原0在122586989ms POINTER_UP，末指1在122587003ms CANCEL(flags32)，未收到最终 UP。独立全量复核除该末指取消外无指针/动作/时间异常。[源帧与销毁](reports/touch-helper-2026-10-28/merge-moving-trace-helper.json) 显示物理最后 UP 帧在122586992ms，含 tracking=-1、BTN_TOUCH=0，destroy122586993ms。这支持继续验证最终帧与设备删除的时序竞争，但尚不证明 Android 内部具体消费分支。
+
+以 `./scripts/assert-touch-receiver.ps1 -Path <上述3413事件报告> -MinPointers 3` 建立可重复的 CANCEL/最终UP 判定，修复前报告返回退出码1、`Touch continuity failed: receiver observed ACTION_CANCEL`。此脚本只核对保存完整、最低同时触点数、无CANCEL及最终UP，不替代完整 pointerId/history 连续性检查。
+
+候选缓解为正常排空时保留100ms连续源空闲窗口：期间继续读取/转发与心跳，任何完整源帧或实时空闲检查不成立均重置窗口；结束前仍检查live槽、键和队列，硬期限不延长。它不是InputReader消费确认，异常/硬截止及极端系统调度下不保证手势连续；不得宣称100ms为通用保证。没有以阻塞sleep代替转发。
+
+首轮100ms对照：[接收器](reports/touch-helper-2026-10-28/merge-settled-1793281959138.jsonl) 3678个事件、deviceId=32、max3、0CANCEL、无截断、正常volume_down保存，原双指完整结束为POINTER_UP及UP，eventTime均122943667ms。[源帧日志](reports/touch-helper-2026-10-28/merge-settled-helper.json) 的最后UP在122943667ms、destroy122943769ms，相隔102ms；用户确认未见异常。相同断言命令针对新报告返回退出码0、`PASS: 3678 events, max 3 pointers, no CANCEL, final UP`，旧失败报告不作修改。带日志版本SHA为`D56ABC5803B001467268460BF4D381C9D23C80544D1DCC5D3A5220B27DAC80AB`。之后已移除所有临时DEBUG/native时钟函数，正式版SHA为`0DD9BFBB85C96ACA6E1BBA2FC441C8A4C5CADDB6F39FE834FCB7B0C1A4CB23B7`，Android严格Clippy及构建通过，正在重复真机对照。仅一次green不代表问题完全解决。
+
+正式版重复已执行并归档：[第一轮](reports/touch-helper-2026-10-28/merge-settled-release-1793282339490.jsonl) 4036事件/7478history、device33，合成pointer2在123176674–123176731ms存续57ms，原0/1连续，最终于123191298/123191310ms正常退出；同轮还有[无合成前段](reports/touch-helper-2026-10-28/merge-settled-release-1793282292334.jsonl)309事件/522history、0CANCEL、最终UP。[第二轮](reports/touch-helper-2026-10-28/merge-settled-repeat-1793282510672.jsonl)7208事件/13804history、device34，合成pointer2在123411459–123411516ms存续57ms，原1在123423010ms POINTER_UP、原0在123423018ms UP。两轮均0CANCEL、max3、未截断、全屏、正常保存、最后0活跃触点；[第一轮helper](reports/touch-helper-2026-10-28/merge-settled-release-helper.jsonl)、[第二轮helper](reports/touch-helper-2026-10-28/merge-settled-repeat-helper.jsonl)均正常退出0，用户均确认未见异常。
+
+Spec独立全量复核上述正式版事件/history，指针集合、动作/index转换、downTime与时序0异常。第一正式轮合成窗有6MOVE/11history，原两指均有坐标变化；第二正式轮有5MOVE/9history，仅原pointer1在窗内变化、pointer0固定，不能写成每轮合成窗内两指都在移动。结合此前61ms诊断轮，本阶段支持3次单点击和正常收尾成功；不是游戏10次重复、长期稳定、旋转/锁屏或停止期间重新落指的验收通过。
+
 ## 接收器与复现
 
 独立模块 `android/touch-receiver`，包名 `dev.paimon.touchreceiver`，无需新增权限。构建命令为 `gradle -p android :touch-receiver:assembleDebug :touch-receiver:lintDebug`；输出 `android/touch-receiver/build/outputs/apk/debug/touch-receiver-debug.apk`。已构建、安装并在基准手机打开；Lint 0 错误、5 个警告（API/横屏/图标/绘制分配等验证工具限制）。
@@ -70,4 +88,4 @@
 
 报告中的 `maxAppDispatchDelayMs` 包含 Android 批处理和应用调度，不等于代理新增延迟，不能以它宣称触控延迟已达标。崩溃/被杀前未保存的内存记录可能丢失，不能把缺失报告算为通过。使用 `adb shell run-as dev.paimon.touchreceiver ls files` 查找文件，再以单独 `adb exec-out run-as ... cat files/<name>` 归档。
 
-下一步补双指持续拖动时的第三触点、重复实验及旋转/锁屏/异常恢复，最后进入游戏实际拾取与原工单重复门槛。尚未进行任何游戏合成点击。
+后续尚需重复多次点击、旋转/锁屏/异常恢复及游戏实际拾取与原工单门槛。用户已选择停止本阶段测试、转入02开发，未经新指示不继续安排这些手机实验。尚未进行任何游戏合成点击。
