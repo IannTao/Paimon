@@ -1,6 +1,10 @@
 # Paimon
 
+开发工单统一在 [GitHub Issues](https://github.com/IannTao/Paimon/issues) 跟踪，见[开发总览](https://github.com/IannTao/Paimon/issues/1)与[编号映射](docs/issues/index.md)。下一项为 [#16：路径点导入与预检](https://github.com/IannTao/Paimon/issues/16)（迁移前本地编号 15）。
+
 当前目标已于 2026-10-29 调整为**全自动跑图采集**：程序自动到达资源点、调整视角并拾取，任务执行期间玩家不手工介入。方案见 [全自动跑图采集设计](docs/auto-pickup-design.md) 和 [规格](docs/specs/android-auto-pickup.md)。真实触控与注入点击共存不再是首版门槛，取代关系见 [ADR 0003](docs/adr/0003-autonomous-gathering.md)。
+
+2026-10-30 起，后续开发优先[兼容 BetterGI 路径点](docs/bettergi-pathing-compatibility.md)，顺序为：导入与预检 → 游戏坐标定位 → 按点跑图与自动传送 → 到点拾取 → 完整路线采集。复用 repo/pathing 的原文件，未支持的必需动作在启动前明确拦截。该兼容能力目前尚未实现；07 的移动验证继续保留。
 
 已实现工单 07 的自动移动验证 APK（0.2.0-movement）：从应用启动后自动进入原神，读取画面、执行一次有时限的摇杆操作，再根据小地图位移确认移动效果。正常移动、按住时主动停止、按住时切离游戏已取得真机证据，见 [07 验证记录](docs/validation/ticket-07.md) 和 [双轴审查](docs/validation/ticket-07-review.md)。尚未实现拾取或到资源点的完整采集闭环。
 

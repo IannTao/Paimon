@@ -1,5 +1,8 @@
 # 07: 从应用启动并完成一次有画面反馈的自动移动
 
+<!-- paimon-github-archive -->
+> 2026-10-31 已迁移到 [GitHub #8](https://github.com/IannTao/Paimon/issues/8)。本地编号 07 仅作追溯；以下为迁移前快照，当前状态、依赖及讨论以 GitHub 为准。
+
 **What to build:** 完成授权后从应用启动一次短距离移动验证，程序检查游戏画面，自动按住并释放摇杆，通过后续画面确认移动效果，结束并显示结果；作为采集任务的最小贯通路径，不宣称完整采集通过。
 
 **Blocked by:** None (can start immediately).

@@ -11,7 +11,7 @@
 
 ### Issue tracker
 
-Issues live in local Markdown files.
+GitHub Issues in `IannTao/Paimon` is the issue tracker. Local issue Markdown files are migration archives.
 Read `docs/agents/issue-tracker.md` before issue operations.
 
 ### Triage labels

@@ -6,3 +6,18 @@
 /.tools/
 *.jks
 *.keystore
+
+/.scratch/**/*.png
+
+# Local agent settings and machine-specific permissions.
+/.codex/config.toml
+/.codex/rules/git.rules
+/.codex/rules/scripts.rules
+
+# Keep referenced migration archives, not temporary tools or upstream clones.
+/.scratch/*
+!/.scratch/android-auto-pickup/
+/.scratch/android-auto-pickup/*
+!/.scratch/android-auto-pickup/issues/
+!/.scratch/android-auto-pickup/input-capabilities.c
+!/.scratch/android-auto-pickup/adb-policy-check.json

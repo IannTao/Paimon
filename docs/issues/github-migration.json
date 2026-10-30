@@ -1,0 +1,380 @@
+{
+  "repository": "IannTao/Paimon",
+  "migrationDate": "2026-10-31",
+  "overview": "https://github.com/IannTao/Paimon/issues/1",
+  "verifiedAt": "2026-10-31",
+  "issues": [
+    {
+      "localId": "01",
+      "title": "01: 真机验证自动点击与玩家触控共存",
+      "githubNumber": 2,
+      "url": "https://github.com/IannTao/Paimon/issues/2",
+      "archived": true,
+      "state": "closed",
+      "stateReason": "not_planned",
+      "triageLabel": "wontfix",
+      "sourceArchive": ".scratch/android-auto-pickup/issues/01-touch-coexistence.md",
+      "originalSourceSha256": "976b15c157a9e466c9c73c5051a8a83f78eacc227137b38f36e66b1ffba7232c",
+      "originalStatus": "ready-for-agent",
+      "originalLifecycle": "in-progress",
+      "blockedByLocalIds": [],
+      "blockedByGitHubNumbers": []
+    },
+    {
+      "localId": "02",
+      "title": "02: 跑通单个物品的自动拾取会话",
+      "githubNumber": 3,
+      "url": "https://github.com/IannTao/Paimon/issues/3",
+      "archived": true,
+      "state": "closed",
+      "stateReason": "not_planned",
+      "triageLabel": "wontfix",
+      "sourceArchive": ".scratch/android-auto-pickup/issues/02-single-item-session.md",
+      "originalSourceSha256": "8e08c7c0ebf79357b72ba8fcb392b6b6f5f2ef9f9a15d8919ac9d376f8918d81",
+      "originalStatus": "ready-for-agent",
+      "originalLifecycle": "in-progress",
+      "blockedByLocalIds": [
+        "01"
+      ],
+      "blockedByGitHubNumbers": [
+        2
+      ]
+    },
+    {
+      "localId": "03",
+      "title": "03: 覆盖连续拾取与混合交互场景",
+      "githubNumber": 4,
+      "url": "https://github.com/IannTao/Paimon/issues/4",
+      "archived": true,
+      "state": "closed",
+      "stateReason": "not_planned",
+      "triageLabel": "wontfix",
+      "sourceArchive": ".scratch/android-auto-pickup/issues/03-continuous-and-mixed-pickup.md",
+      "originalSourceSha256": "30f5a86f8f77832e8309331235814d8f47698b2d5360bc09dc05d4f4d512b542",
+      "originalStatus": "ready-for-agent",
+      "originalLifecycle": "open",
+      "blockedByLocalIds": [
+        "02"
+      ],
+      "blockedByGitHubNumbers": [
+        3
+      ]
+    },
+    {
+      "localId": "04",
+      "title": "04: 验证异常中断与用户恢复流程",
+      "githubNumber": 5,
+      "url": "https://github.com/IannTao/Paimon/issues/5",
+      "archived": true,
+      "state": "closed",
+      "stateReason": "not_planned",
+      "triageLabel": "wontfix",
+      "sourceArchive": ".scratch/android-auto-pickup/issues/04-interruption-and-recovery.md",
+      "originalSourceSha256": "0a1e0551cd47a9a715f4418634edeb475dfecfb4b3dbfc403ba1efe13ac0e8e8",
+      "originalStatus": "ready-for-agent",
+      "originalLifecycle": "open",
+      "blockedByLocalIds": [
+        "02"
+      ],
+      "blockedByGitHubNumbers": [
+        3
+      ]
+    },
+    {
+      "localId": "05",
+      "title": "05: 提供用户主动开启的本地诊断",
+      "githubNumber": 6,
+      "url": "https://github.com/IannTao/Paimon/issues/6",
+      "archived": true,
+      "state": "closed",
+      "stateReason": "not_planned",
+      "triageLabel": "wontfix",
+      "sourceArchive": ".scratch/android-auto-pickup/issues/05-local-diagnostics.md",
+      "originalSourceSha256": "ca80705086bad79c5f224ada384c0d4300985f9171734e846f24cb8355ed78d1",
+      "originalStatus": "ready-for-agent",
+      "originalLifecycle": "open",
+      "blockedByLocalIds": [
+        "02"
+      ],
+      "blockedByGitHubNumbers": [
+        3
+      ]
+    },
+    {
+      "localId": "06",
+      "title": "06: 完成首版真机验收并交付 APK",
+      "githubNumber": 7,
+      "url": "https://github.com/IannTao/Paimon/issues/7",
+      "archived": true,
+      "state": "closed",
+      "stateReason": "not_planned",
+      "triageLabel": "wontfix",
+      "sourceArchive": ".scratch/android-auto-pickup/issues/06-device-acceptance-and-apk.md",
+      "originalSourceSha256": "e525d47b5956cd3e6edb53f746cdab402b54f98bcfc8dc1521753b8eb890c937",
+      "originalStatus": "ready-for-agent",
+      "originalLifecycle": "open",
+      "blockedByLocalIds": [
+        "03",
+        "04",
+        "05"
+      ],
+      "blockedByGitHubNumbers": [
+        4,
+        5,
+        6
+      ]
+    },
+    {
+      "localId": "07",
+      "title": "07: 从应用启动并完成一次有画面反馈的自动移动",
+      "githubNumber": 8,
+      "url": "https://github.com/IannTao/Paimon/issues/8",
+      "archived": false,
+      "state": "closed",
+      "stateReason": "completed",
+      "triageLabel": "ready-for-agent",
+      "sourceArchive": ".scratch/android-auto-pickup/issues/07-observed-autonomous-movement.md",
+      "originalSourceSha256": "fd566b5fd8f34b27218413dae6fcd18743c8649680d18450a35fd373526deb17",
+      "originalStatus": "ready-for-agent",
+      "originalLifecycle": "closed",
+      "blockedByLocalIds": [],
+      "blockedByGitHubNumbers": []
+    },
+    {
+      "localId": "08",
+      "title": "08: 自动调整视角并拾取近处单个物品",
+      "githubNumber": 9,
+      "url": "https://github.com/IannTao/Paimon/issues/9",
+      "archived": false,
+      "state": "open",
+      "stateReason": null,
+      "triageLabel": "ready-for-agent",
+      "sourceArchive": ".scratch/android-auto-pickup/issues/08-camera-and-nearby-pickup.md",
+      "originalSourceSha256": "3c6ca8f054794a48863a2a768faf21fca25534cabac2d843b5d0ebfcdbff3292",
+      "originalStatus": "ready-for-agent",
+      "originalLifecycle": "open",
+      "blockedByLocalIds": [
+        "17",
+        "18"
+      ],
+      "blockedByGitHubNumbers": [
+        18,
+        19
+      ]
+    },
+    {
+      "localId": "09",
+      "title": "09: 从固定起点完成单资源点跑图采集闭环",
+      "githubNumber": 10,
+      "url": "https://github.com/IannTao/Paimon/issues/10",
+      "archived": false,
+      "state": "open",
+      "stateReason": null,
+      "triageLabel": "ready-for-agent",
+      "sourceArchive": ".scratch/android-auto-pickup/issues/09-single-resource-gathering.md",
+      "originalSourceSha256": "a6b86a9e7c011717deee3a34d8dfe39aa69c33d7c534bb91e2b5722c950fd847",
+      "originalStatus": "ready-for-agent",
+      "originalLifecycle": "open",
+      "blockedByLocalIds": [
+        "08"
+      ],
+      "blockedByGitHubNumbers": [
+        9
+      ]
+    },
+    {
+      "localId": "10",
+      "title": "10: 正确处理多个拾取提示和混合交互",
+      "githubNumber": 11,
+      "url": "https://github.com/IannTao/Paimon/issues/11",
+      "archived": false,
+      "state": "open",
+      "stateReason": null,
+      "triageLabel": "ready-for-agent",
+      "sourceArchive": ".scratch/android-auto-pickup/issues/10-mixed-and-multiple-prompts.md",
+      "originalSourceSha256": "1bf9eefc3145bcd28b679c6a24b706d3a8afeb977426dca0fb699c286d2cee18",
+      "originalStatus": "ready-for-agent",
+      "originalLifecycle": "open",
+      "blockedByLocalIds": [
+        "09"
+      ],
+      "blockedByGitHubNumbers": [
+        10
+      ]
+    },
+    {
+      "localId": "11",
+      "title": "11: 连续完成短路线上的多个资源点",
+      "githubNumber": 12,
+      "url": "https://github.com/IannTao/Paimon/issues/12",
+      "archived": false,
+      "state": "open",
+      "stateReason": null,
+      "triageLabel": "ready-for-agent",
+      "sourceArchive": ".scratch/android-auto-pickup/issues/11-multi-resource-route.md",
+      "originalSourceSha256": "ae26bb6d1ea268271b7e5d14e665546ce4863e5f53c0d910ce0ca07b26f11a8f",
+      "originalStatus": "ready-for-agent",
+      "originalLifecycle": "open",
+      "blockedByLocalIds": [
+        "09"
+      ],
+      "blockedByGitHubNumbers": [
+        10
+      ]
+    },
+    {
+      "localId": "12",
+      "title": "12: 采集受阻时自动有限恢复并明确结束",
+      "githubNumber": 13,
+      "url": "https://github.com/IannTao/Paimon/issues/13",
+      "archived": false,
+      "state": "open",
+      "stateReason": null,
+      "triageLabel": "ready-for-agent",
+      "sourceArchive": ".scratch/android-auto-pickup/issues/12-bounded-autonomous-recovery.md",
+      "originalSourceSha256": "b22743cf4a7d77a4cb58df609916efd2a624c9e60fa988020d3e7b9f9db4f535",
+      "originalStatus": "ready-for-agent",
+      "originalLifecycle": "open",
+      "blockedByLocalIds": [
+        "09"
+      ],
+      "blockedByGitHubNumbers": [
+        10
+      ]
+    },
+    {
+      "localId": "13",
+      "title": "13: 查看任务报告并主动开启本地诊断",
+      "githubNumber": 14,
+      "url": "https://github.com/IannTao/Paimon/issues/14",
+      "archived": false,
+      "state": "open",
+      "stateReason": null,
+      "triageLabel": "ready-for-agent",
+      "sourceArchive": ".scratch/android-auto-pickup/issues/13-task-reports-and-diagnostics.md",
+      "originalSourceSha256": "3ce911b98a62a3173a52f8f369f4a356f238bd15dbdfc2ba0e3830e88b6bf037",
+      "originalStatus": "ready-for-agent",
+      "originalLifecycle": "open",
+      "blockedByLocalIds": [
+        "09"
+      ],
+      "blockedByGitHubNumbers": [
+        10
+      ]
+    },
+    {
+      "localId": "14",
+      "title": "14: 整合短路线真机验收并交付自用 APK",
+      "githubNumber": 15,
+      "url": "https://github.com/IannTao/Paimon/issues/15",
+      "archived": false,
+      "state": "open",
+      "stateReason": null,
+      "triageLabel": "ready-for-agent",
+      "sourceArchive": ".scratch/android-auto-pickup/issues/14-autonomous-gathering-acceptance.md",
+      "originalSourceSha256": "4b9896fccb2e290803237915603399e9674f596b753bf3905b56ef6f2c1d69b3",
+      "originalStatus": "ready-for-agent",
+      "originalLifecycle": "open",
+      "blockedByLocalIds": [
+        "10",
+        "11",
+        "12",
+        "13"
+      ],
+      "blockedByGitHubNumbers": [
+        11,
+        12,
+        13,
+        14
+      ]
+    },
+    {
+      "localId": "15",
+      "title": "15: 导入并预检 BetterGI 路径点原文件",
+      "githubNumber": 16,
+      "url": "https://github.com/IannTao/Paimon/issues/16",
+      "archived": false,
+      "state": "open",
+      "stateReason": null,
+      "triageLabel": "ready-for-agent",
+      "sourceArchive": ".scratch/android-auto-pickup/issues/15-bettergi-route-import.md",
+      "originalSourceSha256": "ffb78d5e2459b5b8bdf090d2051aa6d1f2807fb95f86a2e84a9dbf73448c9380",
+      "originalStatus": "ready-for-agent",
+      "originalLifecycle": "open",
+      "blockedByLocalIds": [],
+      "blockedByGitHubNumbers": []
+    },
+    {
+      "localId": "16",
+      "title": "16: 将手机屏幕定位对应到 BetterGI 游戏坐标",
+      "githubNumber": 17,
+      "url": "https://github.com/IannTao/Paimon/issues/17",
+      "archived": false,
+      "state": "open",
+      "stateReason": null,
+      "triageLabel": "ready-for-agent",
+      "sourceArchive": ".scratch/android-auto-pickup/issues/16-bettergi-game-coordinate-localization.md",
+      "originalSourceSha256": "3110a6400259b6c535b128ed532e7c629a2e791903a233b6ae7c0f6349889644",
+      "originalStatus": "ready-for-agent",
+      "originalLifecycle": "open",
+      "blockedByLocalIds": [
+        "15",
+        "07"
+      ],
+      "blockedByGitHubNumbers": [
+        16,
+        8
+      ]
+    },
+    {
+      "localId": "17",
+      "title": "17: 按导入路线的地面路径点自动跑图",
+      "githubNumber": 18,
+      "url": "https://github.com/IannTao/Paimon/issues/18",
+      "archived": false,
+      "state": "open",
+      "stateReason": null,
+      "triageLabel": "ready-for-agent",
+      "sourceArchive": ".scratch/android-auto-pickup/issues/17-bettergi-waypoint-ground-navigation.md",
+      "originalSourceSha256": "a1fda02e4e9bdea02fa83c26b944313ed934c837d97548414e313f5a2976c167",
+      "originalStatus": "ready-for-agent",
+      "originalLifecycle": "open",
+      "blockedByLocalIds": [
+        "16"
+      ],
+      "blockedByGitHubNumbers": [
+        17
+      ]
+    },
+    {
+      "localId": "18",
+      "title": "18: 自动完成导入路线要求的传送并重新定位",
+      "githubNumber": 19,
+      "url": "https://github.com/IannTao/Paimon/issues/19",
+      "archived": false,
+      "state": "open",
+      "stateReason": null,
+      "triageLabel": "ready-for-agent",
+      "sourceArchive": ".scratch/android-auto-pickup/issues/18-bettergi-route-teleport.md",
+      "originalSourceSha256": "323bc0788797fb7d209ecbf8f12cb25d99e7321d487fb7fa21fdded3809df7e0",
+      "originalStatus": "ready-for-agent",
+      "originalLifecycle": "open",
+      "blockedByLocalIds": [
+        "16"
+      ],
+      "blockedByGitHubNumbers": [
+        17
+      ]
+    }
+  ],
+  "verification": {
+    "issueBodies": 18,
+    "currentSubIssues": 12,
+    "nativeDependencyEdges": 15,
+    "statesAndClosureReasons": "passed",
+    "triageLabels": "passed",
+    "bodyAndDiscussionPreservation": "passed",
+    "localLinks": "passed",
+    "overviewPinned": true
+  }
+}

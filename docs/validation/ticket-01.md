@@ -92,7 +92,7 @@ adb install -r android/app/build/outputs/apk/debug/app-debug.apk
 
 2026-10-27（权限准备）：用户开启权限后，`appops get --user 0 dev.paimon.probe SYSTEM_ALERT_WINDOW` 确认 `allow`；用户 0 的 `enabled_accessibility_services` 包含 `dev.paimon.probe/dev.paimon.probe.ProbeAccessibilityService`。开始准备游戏内拾取场景和目标坐标，尚未创建点击实验或产生真机结果。
 
-2026-10-27（场景准备）：用户就位后，通过 ADB 截图确认中文游戏画面出现两条“「琉璃百合」的种子”拾取提示。物理屏幕为 1116×2480，截图为横屏，计划使用上方提示中心附近的全屏坐标 X=1680、Y=510。初始画面保存在仓库 `.scratch/android-auto-pickup/ticket01-scene.png`。尚未注入点击；游戏画质、UI 配置及人工基线观察仍待记录。
+2026-10-27（场景准备）：用户就位后，通过 ADB 截图确认中文游戏画面出现两条“「琉璃百合」的种子”拾取提示。物理屏幕为 1116×2480，截图为横屏，计划使用上方提示中心附近的全屏坐标 X=1680、Y=510。初始画面原存于 `.scratch/android-auto-pickup/ticket01-scene.png`，同内容现已[归档](reports/ticket-07/candidate-route.png)。尚未注入点击；游戏画质、UI 配置及人工基线观察仍待记录。
 
 ### USB 连接排查（2026-10-27）
 

@@ -160,7 +160,7 @@ C:\Users\tyc\code\dev-tools\android-sdk\platform-tools\adb.exe shell dumpsys act
 
 ## 原实验准备信息（历史，当前路径已失败）
 
-手机已切回 Paimon。用户先前确认坐标填好，更新为 0.1.1 后已恢复 X=1680、Y=510，并确认离开应用时成功保存。初始游戏截图见 [ticket01-scene.png](../../.scratch/android-auto-pickup/ticket01-scene.png)，其中有两条“「琉璃百合」的种子”拾取提示。
+手机已切回 Paimon。用户先前确认坐标填好，更新为 0.1.1 后已恢复 X=1680、Y=510，并确认离开应用时成功保存。初始游戏截图见 [ticket01-scene.png（同图归档）](reports/ticket-07/candidate-route.png)，其中有两条“「琉璃百合」的种子”拾取提示。
 
 - 屏幕物理尺寸：竖屏 1116×2480；此次截图为横屏。
 - 计划目标：上方拾取提示中心附近 **X=1680、Y=510**，尚未验证点击命中。

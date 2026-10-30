@@ -1,0 +1,73 @@
+[
+  {
+    "case": "实际路径：设备列表",
+    "command": [
+      "C:/Users/tyc/code/dev-tools/android-sdk/platform-tools/adb.exe",
+      "devices",
+      "-l"
+    ],
+    "matchedAllow": true,
+    "passed": true
+  },
+  {
+    "case": "Windows 路径：shell",
+    "command": [
+      "C:\\Users\\tyc\\code\\dev-tools\\android-sdk\\platform-tools\\adb.exe",
+      "-s",
+      "D123133103AF",
+      "shell",
+      "wm",
+      "size"
+    ],
+    "matchedAllow": true,
+    "passed": true
+  },
+  {
+    "case": "实际路径：安装 APK",
+    "command": [
+      "C:/Users/tyc/code/dev-tools/android-sdk/platform-tools/adb.exe",
+      "install",
+      "-r",
+      "android/app/build/outputs/apk/debug/app-debug.apk"
+    ],
+    "matchedAllow": true,
+    "passed": true
+  },
+  {
+    "case": "不放行其他 adb",
+    "command": [
+      "C:/other/adb.exe",
+      "devices"
+    ],
+    "matchedAllow": false,
+    "passed": true
+  },
+  {
+    "case": "不放行裸命令名",
+    "command": [
+      "adb",
+      "devices"
+    ],
+    "matchedAllow": false,
+    "passed": true
+  },
+  {
+    "case": "不放行近似文件名",
+    "command": [
+      "C:/Users/tyc/code/dev-tools/android-sdk/platform-tools/adb.exe.bak",
+      "devices"
+    ],
+    "matchedAllow": false,
+    "passed": true
+  },
+  {
+    "case": "不放行任意 PowerShell",
+    "command": [
+      "C:\\Program Files\\PowerShell\\7\\pwsh.exe",
+      "-Command",
+      "whoami"
+    ],
+    "matchedAllow": false,
+    "passed": true
+  }
+]
