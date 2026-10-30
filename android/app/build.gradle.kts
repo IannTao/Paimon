@@ -11,8 +11,9 @@ android {
         applicationId = "dev.paimon.probe"
         minSdk = 34
         targetSdk = 34
-        versionCode = 4
-        versionName = "0.1.3-probe"
+        versionCode = 5
+        versionName = "0.2.0-movement"
+        testInstrumentationRunner = "dev.paimon.probe.MovementDeviceChecks"
         ndk { abiFilters += "arm64-v8a" }
     }
     buildFeatures { aidl = true; buildConfig = true }

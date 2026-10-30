@@ -1,0 +1,18 @@
+{
+  "runId": 423215252122313,
+  "verdictCode": 13,
+  "result": "已主动停止",
+  "detail": "玩家主动停止",
+  "releaseConfirmed": true,
+  "frameCount": 4,
+  "lastFrameElapsedMs": 423218559,
+  "inputStartedUptimeMs": 132363763,
+  "inputReturnedUptimeMs": 0,
+  "releasedHoldAtUptimeMs": 132364267,
+  "gamePackage": "com.miHoYo.Yuanshen",
+  "gameSettings": "Z50Ultra_MyOS14.5.33_2480x1116_R90_Chinese_existingUI_quality_unverified_Mondstadt_fountain",
+  "inputPath": "Shizuku shell InputManager; bounded 900ms joystick; local 1200ms watchdog",
+  "screenPath": "Shizuku shell screencap; memory only",
+  "movementEvidence": "unconfirmed",
+  "overallGatheringGate": "unverified"
+}

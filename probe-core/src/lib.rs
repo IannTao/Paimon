@@ -1,6 +1,11 @@
 //! A bounded, explicitly started touch experiment. Command completion is not
 //! evidence that the game accepted a click or that physical touches survived.
 
+pub mod movement;
+
+#[cfg(target_os = "android")]
+mod movement_android;
+
 const COUNTDOWN_MS: u64 = 5_000;
 const INTERVAL_MS: u64 = 1_000;
 const MAX_SESSION_MS: u64 = 120_000;

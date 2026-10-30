@@ -1,0 +1,18 @@
+{
+  "runId": 423313689873629,
+  "verdictCode": 16,
+  "result": "原神不在前台",
+  "detail": "java.lang.IllegalStateException: 原神不在前台",
+  "releaseConfirmed": true,
+  "frameCount": 4,
+  "lastFrameElapsedMs": 423316910,
+  "inputStartedUptimeMs": 132462115,
+  "inputReturnedUptimeMs": 0,
+  "releasedHoldAtUptimeMs": 0,
+  "gamePackage": "com.miHoYo.Yuanshen",
+  "gameSettings": "Z50Ultra_MyOS14.5.33_2480x1116_R90_Chinese_existingUI_quality_unverified_Mondstadt_fountain",
+  "inputPath": "Shizuku shell InputManager; bounded 900ms joystick; local 1200ms watchdog",
+  "screenPath": "Shizuku shell screencap; memory only",
+  "movementEvidence": "unconfirmed",
+  "overallGatheringGate": "unverified"
+}

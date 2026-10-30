@@ -47,6 +47,7 @@ class ReturnOverlayService : Service() {
             contentDescription = "返回 Paimon，拖动可移动"
             setOnClickListener {
                 ProbeService.pauseForReturn()
+                MovementService.stopForReturn()
                 startActivity(appIntent())
             }
         }

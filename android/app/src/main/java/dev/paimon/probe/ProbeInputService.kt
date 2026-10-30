@@ -19,19 +19,7 @@ class ProbeInputService : IProbeInput.Stub() {
 
     override fun foregroundPackage(): String {
         requireShellIdentity()
-        // Query the resumed Activity, not the last accessibility window (which may be an overlay).
-        // This fixed command contains no user-provided shell text. grep bounds the output so
-        // waiting before reading cannot fill the process pipe with the full task dump.
-        val child = ProcessBuilder("/system/bin/sh", "-c",
-            "/system/bin/dumpsys activity activities | /system/bin/grep -m 1 topResumedActivity")
-            .redirectErrorStream(true).start()
-        return try {
-            if (!child.waitFor(1, TimeUnit.SECONDS) || child.exitValue() != 0) ""
-            else Regex("\\bu\\d+\\s+([A-Za-z0-9_.]+)/").find(child.inputStream.bufferedReader().use { it.readText() })
-                ?.groupValues?.get(1).orEmpty()
-        } finally {
-            child.destroyForcibly()
-        }
+        return ShellForeground.resumedPackage()
     }
 
     override fun tap(x: Int, y: Int, expectedPackage: String): Int {

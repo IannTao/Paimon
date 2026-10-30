@@ -33,7 +33,8 @@ class MainActivity : Activity() {
         super.onCreate(savedInstanceState)
         form = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(24, 24, 24, 24) }
         setContentView(ScrollView(this).apply { addView(form) })
-        label("工单 01：触控共存验证\n命令成功不等于游戏接受，更不等于触控验证通过。")
+        label("工单 07：有画面反馈的自动移动\n固定 2480×1116 横屏、正常绿色血条和小地图布局；运行中请勿手动操作。")
+        label("07 需要悬浮窗和 Shizuku 授权；无障碍设置供旧触控实验使用。")
         status = label("")
         button("1. 悬浮窗权限") { startActivity(Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, Uri.parse("package:$packageName"))) }
         button("2. 无障碍设置") { startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS)) }
@@ -44,6 +45,28 @@ class MainActivity : Activity() {
             }.onFailure { status.text = it.message }
         }
         button("4. 允许通知（建议）") { requestPermissions(arrayOf(Manifest.permission.POST_NOTIFICATIONS), 2) }
+        val movementSettings = field("07 游戏显示设置、起点和方向记录", preferences.getString("movementSettings", "").orEmpty())
+        button("启动 07 自动移动（约 0.9 秒，自动进入原神）") {
+            runCatching {
+                check(Settings.canDrawOverlays(this)) { "请先允许悬浮窗" }
+                check(Shizuku.pingBinder() && Shizuku.checkSelfPermission() == PackageManager.PERMISSION_GRANTED
+                    && Shizuku.getUid() == 2000) { "请先准备 shell Shizuku 授权" }
+                check(movementSettings.text.isNotBlank()) { "请先记录固定显示设置、起点和朝向" }
+                val game = checkNotNull(packageManager.getLaunchIntentForPackage(MovementService.GAME)) { "未安装基准原神包" }
+                preferences.edit().putString("movementSettings", movementSettings.text.toString()).apply()
+                stopService(Intent(this, ProbeService::class.java))
+                stopService(Intent(this, ReturnOverlayService::class.java))
+                stopService(Intent(this, MovementService::class.java))
+                startForegroundService(Intent(this, MovementService::class.java).putExtra("settings", movementSettings.text.toString()))
+                startActivity(game)
+            }.onFailure { status.text = "未启动：${it.message}" }
+        }
+        button("停止 07 自动移动") { stopService(Intent(this, MovementService::class.java)) }
+        button("查看 07 最新结果") {
+            status.text = runCatching { MovementReports.latest(this).toString(2) }
+                .getOrElse { "尚无 07 任务报告" }
+        }
+        label("以下为旧触控共存实验，不是全自动采集入口。")
         button("显示返回 Paimon 悬浮按钮（可拖动）") {
             preferences.edit().putBoolean("returnOverlayEnabled", true).apply()
             showReturnOverlay()
@@ -131,6 +154,7 @@ class MainActivity : Activity() {
     override fun onResume() {
         super.onResume()
         ProbeService.pauseForReturn()
+        MovementService.stopForReturn()
         if (::status.isInitialized) refresh()
         if (preferences.getBoolean("returnOverlayEnabled", true) && Settings.canDrawOverlays(this)) showReturnOverlay()
     }

@@ -1,0 +1,18 @@
+{
+  "runId": 423011356557130,
+  "verdictCode": 10,
+  "result": "小地图位移已确认（仅移动验证，不代表采集完成）",
+  "detail": "",
+  "releaseConfirmed": true,
+  "frameCount": 8,
+  "lastFrameElapsedMs": 423017019,
+  "inputStartedUptimeMs": 132159877,
+  "inputReturnedUptimeMs": 132160819,
+  "releasedHoldAtUptimeMs": 0,
+  "gamePackage": "com.miHoYo.Yuanshen",
+  "gameSettings": "Z50Ultra_MyOS14.5.33_2480x1116_R90_Chinese_existingUI_quality_unverified_Mondstadt_fountain_stonepath_forward_900ms",
+  "inputPath": "Shizuku shell InputManager; bounded 900ms joystick; local 1200ms watchdog",
+  "screenPath": "Shizuku shell screencap; memory only",
+  "movementEvidence": "stable-minimap-translation",
+  "overallGatheringGate": "unverified"
+}
