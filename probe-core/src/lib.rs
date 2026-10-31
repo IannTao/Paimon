@@ -6,6 +6,9 @@ pub mod movement;
 #[cfg(target_os = "android")]
 mod movement_android;
 
+#[cfg(target_os = "android")]
+mod route_android;
+
 const COUNTDOWN_MS: u64 = 5_000;
 const INTERVAL_MS: u64 = 1_000;
 const MAX_SESSION_MS: u64 = 120_000;
@@ -208,3 +211,4 @@ mod android {
         }
     }
 }
+pub mod route_import;

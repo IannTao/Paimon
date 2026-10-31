@@ -1,0 +1,7 @@
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- Test data stays in the test APK; this read-only adapter exists only in debug builds. -->
+    <queries><package android:name="dev.paimon.probe.test" /></queries>
+    <application>
+        <provider android:name=".RouteFixtureProvider" android:authorities="dev.paimon.probe.test.routes" android:exported="false" />
+    </application>
+</manifest>

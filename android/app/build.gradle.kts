@@ -11,9 +11,10 @@ android {
         applicationId = "dev.paimon.probe"
         minSdk = 34
         targetSdk = 34
-        versionCode = 5
-        versionName = "0.2.0-movement"
-        testInstrumentationRunner = "dev.paimon.probe.MovementDeviceChecks"
+        versionCode = 6
+        versionName = "0.3.0-route-import"
+        testInstrumentationRunner = providers.gradleProperty("deviceCheckRunner")
+            .orElse("dev.paimon.probe.MovementDeviceChecks").get()
         ndk { abiFilters += "arm64-v8a" }
     }
     buildFeatures { aidl = true; buildConfig = true }
@@ -23,6 +24,7 @@ android {
     }
     kotlinOptions { jvmTarget = "17" }
     sourceSets["main"].jniLibs.srcDir(layout.buildDirectory.dir("rustJniLibs"))
+    sourceSets["androidTest"].assets.srcDir("../../probe-core/tests/fixtures")
 }
 
 dependencies {

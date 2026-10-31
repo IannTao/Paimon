@@ -1,6 +1,6 @@
 # BetterGI 路径点兼容方案
 
-2026-10-30 核查。用户指定的来源为 [bettergi-scripts-list/repo/pathing](https://github.com/babalae/bettergi-scripts-list/tree/main/repo/pathing)。这是开发计划和兼容合同，不表示导入器、定位或路线执行已经实现。
+2026-10-30 核查。用户指定的来源为 [bettergi-scripts-list/repo/pathing](https://github.com/babalae/bettergi-scripts-list/tree/main/repo/pathing)。这是开发计划和兼容合同。2026-10-31 已实现 [#16 原文件导入、预览与预检](validation/issue-16.md)；定位或路线执行仍未实现，当前所有格式合法的路线均判为能力未齐。
 
 ## 上游基线
 

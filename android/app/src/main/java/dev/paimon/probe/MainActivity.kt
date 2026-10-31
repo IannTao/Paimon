@@ -33,6 +33,7 @@ class MainActivity : Activity() {
         super.onCreate(savedInstanceState)
         form = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(24, 24, 24, 24) }
         setContentView(ScrollView(this).apply { addView(form) })
+        button("导入/查看 BetterGI 路线") { startActivity(Intent(this, RouteImportActivity::class.java)) }
         label("工单 07：有画面反馈的自动移动\n固定 2480×1116 横屏、正常绿色血条和小地图布局；运行中请勿手动操作。")
         label("07 需要悬浮窗和 Shizuku 授权；无障碍设置供旧触控实验使用。")
         status = label("")

@@ -1,1 +1,3 @@
 scripts/*.sh text eol=lf
+# Regression fixtures are byte identities, including their original line endings.
+/probe-core/tests/fixtures/bettergi/*.json -text

@@ -1,10 +1,16 @@
 # Paimon
 
-开发工单统一在 [GitHub Issues](https://github.com/IannTao/Paimon/issues) 跟踪，见[开发总览](https://github.com/IannTao/Paimon/issues/1)与[编号映射](docs/issues/index.md)。下一项为 [#16：路径点导入与预检](https://github.com/IannTao/Paimon/issues/16)（迁移前本地编号 15）。
+开发工单统一在 [GitHub Issues](https://github.com/IannTao/Paimon/issues) 跟踪，见[开发总览](https://github.com/IannTao/Paimon/issues/1)与[编号映射](docs/issues/index.md)。已实现 [#16：路径点导入与预检](https://github.com/IannTao/Paimon/issues/16)，下一项为 [#17：游戏坐标定位](https://github.com/IannTao/Paimon/issues/17)。
 
 当前目标已于 2026-10-29 调整为**全自动跑图采集**：程序自动到达资源点、调整视角并拾取，任务执行期间玩家不手工介入。方案见 [全自动跑图采集设计](docs/auto-pickup-design.md) 和 [规格](docs/specs/android-auto-pickup.md)。真实触控与注入点击共存不再是首版门槛，取代关系见 [ADR 0003](docs/adr/0003-autonomous-gathering.md)。
 
-2026-10-30 起，后续开发优先[兼容 BetterGI 路径点](docs/bettergi-pathing-compatibility.md)，顺序为：导入与预检 → 游戏坐标定位 → 按点跑图与自动传送 → 到点拾取 → 完整路线采集。复用 repo/pathing 的原文件，未支持的必需动作在启动前明确拦截。该兼容能力目前尚未实现；07 的移动验证继续保留。
+2026-10-30 起，后续开发优先[兼容 BetterGI 路径点](docs/bettergi-pathing-compatibility.md)，顺序为：导入与预检 → 游戏坐标定位 → 按点跑图与自动传送 → 到点拾取 → 完整路线采集。0.3.0-route-import 已贯通原文件导入、预览、能力诊断和离线保存；世界坐标定位、路线导航、传送和动作均未实现，因此当前导入路线均不可执行。07 的移动验证继续保留。
+
+## 使用路线导入
+
+点击首页“导入/查看 BetterGI 路线”，通过系统文件选择器选择本地原始 JSON 文件。此入口无需 Shizuku、悬浮窗或无障碍授权，不启动游戏控制。支持注释、尾随逗号和 UTF-8 BOM；保留原点序、重复位置、id、版本、作者及扩展信息。界面按 50 点分页，诊断覆盖全部点；超过 2 MiB、10000 点或不合法结构的文件会拒绝导入。
+
+合法文件保存于应用私有存储，包含原始字节、选择来源 URI、SHA-256 和可核验的上游提交；普通本地文件的提交显示“未核验”，不会凭文件名猜测来源。点击“读取已保存路线（离线）”重新预检最近一次合法导入。格式错误会清除当前预览，保留上次合法保存。卸载应用会删除保存文件。验证范围和复现步骤见 [#16 验证记录](docs/validation/issue-16.md)。
 
 已实现工单 07 的自动移动验证 APK（0.2.0-movement）：从应用启动后自动进入原神，读取画面、执行一次有时限的摇杆操作，再根据小地图位移确认移动效果。正常移动、按住时主动停止、按住时切离游戏已取得真机证据，见 [07 验证记录](docs/validation/ticket-07.md) 和 [双轴审查](docs/validation/ticket-07-review.md)。尚未实现拾取或到资源点的完整采集闭环。
 
@@ -32,6 +38,7 @@ Rust 控制倒计时、点击次数、单次在途操作和停止状态；Kotlin
 
 ```powershell
 rustup target add aarch64-linux-android
+cargo fetch --locked
 # 设置 JAVA_HOME、ANDROID_HOME，并确保 cargo 和 Gradle 8.9 可运行。
 sdkmanager "platforms;android-35" "build-tools;34.0.0" "ndk;27.0.12077973" "platform-tools"
 ./scripts/build-probe.ps1
@@ -39,7 +46,7 @@ sdkmanager "platforms;android-35" "build-tools;34.0.0" "ndk;27.0.12077973" "plat
 ./scripts/build-probe.ps1 -Gradle C:/tools/gradle-8.9/bin/gradle.bat
 ```
 
-首次解析 Android 依赖需要网络。Rust 核心没有第三方依赖，使用锁文件与离线构建。Gradle 在打包前调用 Cargo 交叉编译并将生成的本机库打入 APK，缺少 NDK 或 Rust 目标时构建失败，不生成缺少本机库的“成功”交付。
+首次解析 Android 依赖和获取 Rust 依赖需要网络，先运行 `cargo fetch --locked`。路线读取使用 Serde、serde_json_lenient 和 SHA-256，依赖版本由 Cargo.lock 固定；缓存齐备后 Cargo 离线构建。Gradle 在打包前调用 Cargo 交叉编译并将生成的本机库打入 APK，缺少 NDK 或 Rust 目标时构建失败，不生成缺少本机库的“成功”交付。
 
 输出 APK 为 `android/app/build/outputs/apk/debug/app-debug.apk`。仅做 Rust 类型与格式检查可运行 `./scripts/build-probe.ps1 -CheckOnly`；这不代表 Android 编译、安装或真机验证通过。
 
