@@ -1,6 +1,7 @@
 //! A bounded, explicitly started touch experiment. Command completion is not
 //! evidence that the game accepted a click or that physical touches survived.
 
+pub mod localization;
 pub mod movement;
 
 #[cfg(target_os = "android")]
@@ -8,6 +9,9 @@ mod movement_android;
 
 #[cfg(target_os = "android")]
 mod route_android;
+
+#[cfg(target_os = "android")]
+mod localization_android;
 
 const COUNTDOWN_MS: u64 = 5_000;
 const INTERVAL_MS: u64 = 1_000;

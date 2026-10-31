@@ -13,8 +13,29 @@ fn original_route_previews_in_array_order_but_cannot_execute() {
     assert_eq!(report.points[0].point_type, "teleport");
     assert_eq!(report.map_name, "Teyvat");
     assert!(!report.capabilities.is_empty());
-    assert!(report.capabilities.iter().all(|c| !c.executable));
+    assert!(report
+        .capabilities
+        .iter()
+        .filter(|c| c.field != "world_localization")
+        .all(|c| !c.executable));
+    assert!(report
+        .capabilities
+        .iter()
+        .any(|c| c.field == "world_localization" && c.executable));
     assert_eq!(report.original["info"]["authors"][0]["name"], "黎歌");
+}
+
+#[test]
+fn localization_capability_does_not_extend_outside_the_verified_surface_region() {
+    for route in [
+        r#"{"info":{},"positions":[{"x":5000,"y":-665}]}"#,
+        r#"{"info":{"map_name":"TheChasm"},"positions":[{"x":268,"y":-665}]}"#,
+        r#"{"info":{},"config":{"layer":1},"positions":[{"x":268,"y":-665}]}"#,
+    ] {
+        let report = import_route("outside.json", route.as_bytes());
+        assert_eq!(report.status, ImportStatus::Unsupported);
+        assert!(report.capabilities.iter().all(|c| !c.executable));
+    }
 }
 
 #[test]

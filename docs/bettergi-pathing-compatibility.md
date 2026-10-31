@@ -1,6 +1,6 @@
 # BetterGI 路径点兼容方案
 
-2026-10-30 核查。用户指定的来源为 [bettergi-scripts-list/repo/pathing](https://github.com/babalae/bettergi-scripts-list/tree/main/repo/pathing)。这是开发计划和兼容合同。2026-10-31 已实现 [#16 原文件导入、预览与预检](validation/issue-16.md)；定位或路线执行仍未实现，当前所有格式合法的路线均判为能力未齐。
+2026-10-30 核查。用户指定的来源为 [bettergi-scripts-list/repo/pathing](https://github.com/babalae/bettergi-scripts-list/tree/main/repo/pathing)。这是开发计划和兼容合同。2026-10-31 已实现 [#16 原文件导入、预览与预检](validation/issue-16.md)及 [#17 固定手机布局下的璃月港地表局部定位准备](validation/issue-17.md)；路线执行仍未实现，当前所有格式合法的路线均判为能力未齐。定位能力仅对已验证局部点列、无未知地图配置的路线开放，并要求另外取得可信实时画面，不能据此解锁 walk 或 teleport。
 
 ## 上游基线
 

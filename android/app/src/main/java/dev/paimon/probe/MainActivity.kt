@@ -156,6 +156,7 @@ class MainActivity : Activity() {
         super.onResume()
         ProbeService.pauseForReturn()
         MovementService.stopForReturn()
+        LocalizationService.stopForReturn()
         if (::status.isInitialized) refresh()
         if (preferences.getBoolean("returnOverlayEnabled", true) && Settings.canDrawOverlays(this)) showReturnOverlay()
     }

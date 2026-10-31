@@ -14,7 +14,7 @@ import java.nio.charset.StandardCharsets;
 /** Debug-only local adapter; original sample assets live in the separate test APK. */
 public class RouteFixtureProvider extends ContentProvider {
     @Override public boolean onCreate() { return true; }
-    @Override public String getType(Uri uri) { return "application/json"; }
+    @Override public String getType(Uri uri) { return uri.getLastPathSegment().startsWith("image-") ? "image/png" : "application/json"; }
     @Override public Cursor query(Uri uri, String[] projection, String selection, String[] args, String sort) {
         MatrixCursor cursor = new MatrixCursor(new String[]{OpenableColumns.DISPLAY_NAME});
         cursor.addRow(new Object[]{"路线🌸-" + uri.getLastPathSegment() + ".json"});
@@ -25,7 +25,15 @@ public class RouteFixtureProvider extends ContentProvider {
         try {
             byte[] bytes;
             String name = uri.getLastPathSegment();
-            if ("ground".equals(name) || "flight".equals(name)) {
+            if (name.startsWith("image-")) {
+                String file;
+                if ("image-128".equals(name)) file = "harbor-128.png";
+                else if ("image-127".equals(name)) file = "harbor-127.png";
+                else if ("image-chasm".equals(name)) file = "chasm.png";
+                else throw new java.io.FileNotFoundException("Unknown image fixture");
+                try (InputStream input = getContext().createPackageContext("dev.paimon.probe.test", 0)
+                    .getAssets().open("localization/" + file)) { bytes = input.readAllBytes(); }
+            } else if ("ground".equals(name) || "flight".equals(name)) {
                 String file = "ground".equals(name) ? "route-1.json" : "route-2.json";
                 try (InputStream input = getContext().createPackageContext("dev.paimon.probe.test", 0)
                     .getAssets().open("bettergi/" + file)) { bytes = input.readAllBytes(); }

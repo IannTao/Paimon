@@ -160,9 +160,16 @@ pub fn import_route(file_name: &str, bytes: &[u8]) -> ImportReport {
     report.capabilities.push(Capability {
         field: "world_localization".into(),
         recognized: true,
-        executable: false,
+        executable: crate::localization::supports_route(&report),
     });
-    report.error("world_localization", "尚未验证世界坐标定位，不能执行路线");
+    report.error(
+        "world_localization",
+        if crate::localization::supports_route(&report) {
+            "仅璃月港地表局部、2480×1116 固定布局的定位准备已验证；实时画面须单独确认，导航未实现"
+        } else {
+            "路线不在已验证的璃月港地表定位范围或包含未解释的地图配置"
+        },
+    );
     report.capabilities.push(Capability {
         field: format!("map:{}", report.map_name),
         recognized: report.map_name == "Teyvat",

@@ -3,6 +3,8 @@ package dev.paimon.probe
 import android.app.Activity
 import android.content.Intent
 import android.os.Bundle
+import android.content.pm.PackageManager
+import android.provider.Settings
 import android.provider.OpenableColumns
 import android.widget.Button
 import android.widget.LinearLayout
@@ -11,8 +13,9 @@ import android.widget.TextView
 import org.json.JSONObject
 import java.util.concurrent.Executors
 import java.util.concurrent.atomic.AtomicInteger
+import rikka.shizuku.Shizuku
 
-/** Local task preparation only: no input services, game launch or permission requests. */
+/** Route preparation: file import, diagnostic replay and explicitly started screen observation. */
 class RouteImportActivity : Activity() {
     private val worker = Executors.newSingleThreadExecutor()
     private val generation = AtomicInteger()
@@ -24,12 +27,14 @@ class RouteImportActivity : Activity() {
     private var page = 0
     private var capabilityPage = 0
     private var diagnosticPage = 0
+    private var selected: RouteImports.Saved? = null
+    private lateinit var localization: TextView
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         content = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(24, 24, 24, 24) }
         setContentView(ScrollView(this).apply { addView(content) })
-        label(content, "BetterGI 路线导入与预检\n预览游戏坐标，不操作游戏。定位、导航、传送和动作尚未实现，当前路线均不能执行。")
+        label(content, "BetterGI 路线导入与预检\n原文件导入不操作游戏。可检查璃月港地表局部定位；导航、传送和动作尚未实现，当前路线均不能执行。")
         button(content, "选择路线原文件") {
             @Suppress("DEPRECATION")
             startActivityForResult(Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
@@ -38,6 +43,19 @@ class RouteImportActivity : Activity() {
             }, PICK_ROUTE)
         }
         button(content, "读取已保存路线（离线）") { restore() }
+        button(content, "用截图检查定位（历史画面）") {
+            if (selected == null || current?.optString("status") == "invalid") {
+                localization.text = "请先导入合法路线"; return@button
+            }
+            @Suppress("DEPRECATION")
+            startActivityForResult(Intent(Intent.ACTION_OPEN_DOCUMENT).addCategory(Intent.CATEGORY_OPENABLE).setType("image/png"), PICK_IMAGE)
+        }
+        button(content, "开始实时定位准备（进入原神）") { startLocalization() }
+        button(content, "查看上次定位记录（非当前位置）") {
+            localization.text = runCatching { "历史记录，非当前位置，禁止导航\n${LocalizationReports.latest(this).toString(2)}" }
+                .getOrElse { "暂无定位记录：${it.message}" }
+        }
+        localization = label(content, "定位尚未开始。实时准备需要首页的 shell Shizuku 和悬浮窗授权；只观察屏幕，最长45秒，不移动角色。当前仅校验 2480×1116 固定布局、璃月港地表局部参照。")
         status = label(content, "请选择本地 JSON 路线（不超过 2 MiB）。只保存最近一次合法导入。")
         preview = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
         content.addView(preview)
@@ -46,6 +64,24 @@ class RouteImportActivity : Activity() {
     @Deprecated("Platform Activity result API")
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
         super.onActivityResult(requestCode, resultCode, data)
+        if (requestCode == PICK_IMAGE && resultCode == RESULT_OK) {
+            val uri = data?.data ?: return
+            val source = selected ?: return
+            val request = generation.incrementAndGet()
+            localization.text = "正在检查历史画面；非实时，不允许导航…"
+            worker.execute {
+                val result = runCatching {
+                    val bytes = checkNotNull(contentResolver.openInputStream(uri)).use { it.readNBytes(8 * 1024 * 1024 + 1) }
+                    LocalizationReplay.inspect(source.bytes, bytes)
+                }
+                runOnUiThread {
+                    if (!isDestroyed && generation.get() == request) {
+                        localization.text = result.fold({ LocalizationReplay.describe(it, historical = true) }, { "历史画面检查失败，未定位：${it.message}" })
+                    }
+                }
+            }
+            return
+        }
         if (requestCode != PICK_ROUTE || resultCode != RESULT_OK) return
         val uri = data?.data ?: return
         prepare(save = true) {
@@ -65,6 +101,8 @@ class RouteImportActivity : Activity() {
     private fun prepare(save: Boolean, read: () -> RouteImports.Saved) {
         val request = generation.incrementAndGet()
         current = null
+        selected = null
+        localization.text = "定位尚未开始"
         preview.removeAllViews()
         status.text = "正在本地读取并预检…"
         worker.execute {
@@ -81,6 +119,7 @@ class RouteImportActivity : Activity() {
                     result.onSuccess { (source, report) ->
                         sourceUri = source.uri
                         current = report
+                        selected = if (report.getString("status") != "invalid") source else null
                         page = 0
                         capabilityPage = 0
                         diagnosticPage = 0
@@ -90,6 +129,30 @@ class RouteImportActivity : Activity() {
             }
         }
     }
+
+    private fun startLocalization() {
+        runCatching {
+            val report = checkNotNull(current) { "请先导入路线" }
+            check(selected != null && report.getString("status") != "invalid") { "路线格式无效" }
+            check(report.getString("map_name") == "Teyvat") { "当前只支持 Teyvat 的璃月港地表局部定位" }
+            val capabilities = report.getJSONArray("capabilities")
+            check((0 until capabilities.length()).any {
+                val capability = capabilities.getJSONObject(it)
+                capability.getString("field") == "world_localization" && capability.getBoolean("executable")
+            }) { "路线不在已验证的地表区域，或包含未解释的定位配置" }
+            check(Settings.canDrawOverlays(this)) { "请在首页允许悬浮窗权限" }
+            check(Shizuku.pingBinder() && Shizuku.checkSelfPermission() == PackageManager.PERMISSION_GRANTED && Shizuku.getUid() == 2000) { "请在首页准备 shell Shizuku 授权" }
+            val game = checkNotNull(packageManager.getLaunchIntentForPackage(MovementService.GAME)) { "未安装基准原神包" }
+            stopService(Intent(this, MovementService::class.java))
+            stopService(Intent(this, ProbeService::class.java))
+            stopService(Intent(this, ReturnOverlayService::class.java))
+            stopService(Intent(this, LocalizationService::class.java))
+            startForegroundService(Intent(this, LocalizationService::class.java).putExtra("routeSha", report.getString("sha256")))
+            startActivity(game)
+        }.onFailure { localization.text = "定位准备未启动：${it.message}" }
+    }
+
+    override fun onResume() { super.onResume(); LocalizationService.stopForReturn() }
 
     private fun render() {
         val report = current ?: return
@@ -122,7 +185,8 @@ class RouteImportActivity : Activity() {
         val capabilities = report.getJSONArray("capabilities")
         for (i in range("能力", capabilities.length(), capabilityPage) { capabilityPage = it; render() }) {
             val c = capabilities.getJSONObject(i)
-            label(preview, "${c.getString("field")}：${if (c.getBoolean("recognized")) "是" else "否"} / ${if (c.getBoolean("executable")) "是" else "否"}")
+            val scope = if (c.getString("field") == "world_localization") "（仅璃月港地表局部/2480×1116，须检查实时画面）" else ""
+            label(preview, "${c.getString("field")}$scope：${if (c.getBoolean("recognized")) "是" else "否"} / ${if (c.getBoolean("executable")) "是" else "否"}")
         }
         label(preview, "诊断（包含全部路径点及路线配置，独立分页）")
         val diagnostics = report.getJSONArray("diagnostics")
@@ -152,5 +216,5 @@ class RouteImportActivity : Activity() {
         this.text = text; setOnClickListener { action() }; parent.addView(this)
     }
     override fun onDestroy() { generation.incrementAndGet(); worker.shutdownNow(); super.onDestroy() }
-    companion object { private const val PICK_ROUTE = 1601; private const val PAGE_SIZE = 50 }
+    companion object { private const val PICK_ROUTE = 1601; private const val PICK_IMAGE = 1702; private const val PAGE_SIZE = 50 }
 }

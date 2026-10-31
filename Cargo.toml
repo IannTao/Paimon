@@ -1,3 +1,7 @@
 [workspace]
 members = ["probe-core", "touch-helper"]
 resolver = "2"
+
+# Image replay checks exercise the same feature extractor as the phone.
+[profile.dev.package.lowe-sift]
+opt-level = 3

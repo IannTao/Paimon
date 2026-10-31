@@ -11,8 +11,8 @@ android {
         applicationId = "dev.paimon.probe"
         minSdk = 34
         targetSdk = 34
-        versionCode = 6
-        versionName = "0.3.0-route-import"
+        versionCode = 7
+        versionName = "0.4.0-localization"
         testInstrumentationRunner = providers.gradleProperty("deviceCheckRunner")
             .orElse("dev.paimon.probe.MovementDeviceChecks").get()
         ndk { abiFilters += "arm64-v8a" }
@@ -43,6 +43,7 @@ val buildRust by tasks.registering(Exec::class) {
     environment("CARGO_TARGET_DIR", rootProject.projectDir.parentFile.resolve("target").absolutePath)
     commandLine("cargo", "build", "--locked", "--offline", "--release", "--target", "aarch64-linux-android", "-p", "paimon-probe")
     inputs.dir(rootProject.projectDir.parentFile.resolve("probe-core/src"))
+    inputs.dir(rootProject.projectDir.parentFile.resolve("probe-core/assets"))
     inputs.file(rootProject.projectDir.parentFile.resolve("probe-core/Cargo.toml"))
     inputs.file(rootProject.projectDir.parentFile.resolve("Cargo.lock"))
     outputs.file(rootProject.projectDir.parentFile.resolve("target/aarch64-linux-android/release/libpaimon_probe.so"))
