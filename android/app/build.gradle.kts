@@ -11,8 +11,8 @@ android {
         applicationId = "dev.paimon.probe"
         minSdk = 34
         targetSdk = 34
-        versionCode = 7
-        versionName = "0.4.0-localization"
+        versionCode = 8
+        versionName = "0.5.0-navigation"
         testInstrumentationRunner = providers.gradleProperty("deviceCheckRunner")
             .orElse("dev.paimon.probe.MovementDeviceChecks").get()
         ndk { abiFilters += "arm64-v8a" }

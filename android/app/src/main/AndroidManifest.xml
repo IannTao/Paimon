@@ -5,6 +5,9 @@
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <application android:label="Paimon" android:theme="@android:style/Theme.Material.Light.NoActionBar" android:allowBackup="false" android:supportsRtl="true">
         <activity android:name=".RouteImportActivity" android:exported="false" />
+        <service android:name=".NavigationService" android:exported="false" android:foregroundServiceType="specialUse">
+            <property android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE" android:value="User-started bounded ground navigation with screen feedback and visible stop control" />
+        </service>
         <service android:name=".LocalizationService" android:exported="false" android:foregroundServiceType="specialUse">
             <property android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE" android:value="User-started bounded read-only game screen localization with visible state and stop control" />
         </service>

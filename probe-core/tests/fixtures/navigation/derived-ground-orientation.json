@@ -1,0 +1,1 @@
+{"info":{"name":"派生导航验收：原样本点2/3/4及朝向点1，非上游原路线通过","type":"collect","author":"Paimon validation"},"positions":[{"id":2,"x":269.57,"y":-661.89,"type":"path","move_mode":"walk"},{"id":3,"x":278.26,"y":-666.81,"type":"path","move_mode":"walk"},{"id":4,"x":279.47,"y":-663.86,"type":"target","move_mode":"walk"},{"id":1,"x":267.96,"y":-665.16,"type":"orientation","move_mode":"walk"}]}

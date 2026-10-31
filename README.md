@@ -1,10 +1,10 @@
 # Paimon
 
-开发工单统一在 [GitHub Issues](https://github.com/IannTao/Paimon/issues) 跟踪，见[开发总览](https://github.com/IannTao/Paimon/issues/1)与[编号映射](docs/issues/index.md)。已实现 [#16：路径点导入](https://github.com/IannTao/Paimon/issues/16)及 [#17：璃月港地表局部定位](https://github.com/IannTao/Paimon/issues/17)，下一阶段为 [#18：按点跑图](https://github.com/IannTao/Paimon/issues/18)与 [#19：自动传送](https://github.com/IannTao/Paimon/issues/19)。
+开发工单统一在 [GitHub Issues](https://github.com/IannTao/Paimon/issues) 跟踪，见[开发总览](https://github.com/IannTao/Paimon/issues/1)与[编号映射](docs/issues/index.md)。已实现 [#16：路径点导入](https://github.com/IannTao/Paimon/issues/16)、[#17：璃月港地表局部定位](https://github.com/IannTao/Paimon/issues/17)及 [#18：按点地面导航](https://github.com/IannTao/Paimon/issues/18)，下一阶段为 [#19：自动传送](https://github.com/IannTao/Paimon/issues/19)。
 
 当前目标已于 2026-10-29 调整为**全自动跑图采集**：程序自动到达资源点、调整视角并拾取，任务执行期间玩家不手工介入。方案见 [全自动跑图采集设计](docs/auto-pickup-design.md) 和 [规格](docs/specs/android-auto-pickup.md)。真实触控与注入点击共存不再是首版门槛，取代关系见 [ADR 0003](docs/adr/0003-autonomous-gathering.md)。
 
-2026-10-30 起，后续开发优先[兼容 BetterGI 路径点](docs/bettergi-pathing-compatibility.md)，顺序为：导入与预检 → 游戏坐标定位 → 按点跑图与自动传送 → 到点拾取 → 完整路线采集。0.4.0-localization 已贯通原文件导入、预览、能力诊断、离线保存及固定布局下的璃月港地表局部定位准备；路线导航、传送和动作均未实现，当前导入路线仍不可执行。07 的移动验证继续保留。
+2026-10-30 起，后续开发优先[兼容 BetterGI 路径点](docs/bettergi-pathing-compatibility.md)，顺序为：导入与预检 → 游戏坐标定位 → 按点跑图与自动传送 → 到点拾取 → 完整路线采集。0.5.0-navigation 已贯通原文件导入、局部定位、walk 地面导航及 path/target/orientation 点位推进。范围限于固定布局的璃月港地表；传送、拾取及其他动作仍未实现。含必需传送的上游样本只能显式验证导航分段，整条路线仍禁止启动。07 的移动验证继续保留。
 
 ## 使用路线导入
 
@@ -18,7 +18,13 @@
 
 导入合法路线后，可在同一路线页选择“用截图检查定位（历史画面）”，读取 2480×1116 PNG 截图或原尺寸264×264小地图；回放结果明确为历史位置，不能当作当前位置。选择“开始实时定位准备（进入原神）”前，先在首页准备 shell Shizuku 和悬浮窗授权。应用自行进入原神并只读取屏幕，悬浮控制显示当前位置、角色朝向、路线首点与可信状态，最长45秒；可点击停止或返回应用。定位过程中不移动角色。
 
-当前只验证璃月港地表局部和固定2480×1116横屏HUD，不支持其他地图、地下/分层或未知定位配置。过期、模糊、匹配失败会撤销当前位置；坐标突跳需要重新开始定位准备。停止或切离游戏后仅保留带历史标记的记录。局部定位能力通过不表示路线可以导航，所有移动与动作门槛继续拦截。地图来源、误差和复现见 [#17 验证记录](docs/validation/issue-17.md)。
+当前只验证璃月港地表局部和固定2480×1116横屏HUD，不支持其他地图、地下/分层或未知定位配置。过期、模糊、匹配失败会撤销当前位置；坐标突跳需要重新开始定位准备。停止或切离游戏后仅保留带历史标记的记录。只读定位入口不会发出移动输入。地图来源、误差和复现见 [#17 验证记录](docs/validation/issue-17.md)。
+
+## 使用地面导航
+
+准备 shell Shizuku 与悬浮窗授权，导入路线，在已确认起点附近点击“启动整条地面路线”。仅支持已验证区域内的 walk 与 path/target/orientation，无需运行中手工对准。path 在5单位内连续两帧确认经过，target 在2.5单位内连续两帧稳定确认，orientation 只转镜头，朝向误差不超过12°才推进。未知位置、偏离或无进展时自动停止，不盲走或要求玩家接管。
+
+原文件包含必需 teleport 或其他未支持动作时禁止整条启动。开发验证可填写原数组首末序号，点击“仅验证导航分段（非原路线通过）”；结果保留原文件 SHA 与序号，分段通过不代表原路线通过。悬浮按钮、通知或返回应用都能停止并释放输入，每轮最多120秒。可在路线页查看上次导航结果；默认只保存本地报告，可选择额外保存最多160帧小地图诊断图。详细范围、逐点证据及复现见 [#18 验证记录](docs/validation/issue-18.md)。
 
 ## 使用 07 自动移动验证
 

@@ -6,43 +6,8 @@ use std::{ffi::c_void, sync::Mutex};
 
 static TASK: Mutex<Option<(i64, LocalizationTask)>> = Mutex::new(None);
 
-unsafe fn direct<'a>(env: *mut c_void, buffer: *mut c_void, max: usize) -> Option<&'a [u8]> {
-    if buffer.is_null() {
-        return None;
-    }
-    let functions = *(env as *const *const *const c_void);
-    let address: unsafe extern "system" fn(*mut c_void, *mut c_void) -> *const u8 =
-        std::mem::transmute(*functions.add(230));
-    let capacity: unsafe extern "system" fn(*mut c_void, *mut c_void) -> i64 =
-        std::mem::transmute(*functions.add(231));
-    let len = capacity(env, buffer);
-    if !(0..=max as i64).contains(&len) {
-        return None;
-    }
-    let pointer = address(env, buffer);
-    if pointer.is_null() {
-        return None;
-    }
-    Some(std::slice::from_raw_parts(pointer, len as usize))
-}
-unsafe fn output(env: *mut c_void, value: &impl serde::Serialize) -> *mut c_void {
-    let Ok(bytes) = serde_json_lenient::to_vec(value) else {
-        return std::ptr::null_mut();
-    };
-    let Ok(len) = i32::try_from(bytes.len()) else {
-        return std::ptr::null_mut();
-    };
-    let functions = *(env as *const *const *const c_void);
-    let new: unsafe extern "system" fn(*mut c_void, i32) -> *mut c_void =
-        std::mem::transmute(*functions.add(176));
-    let set: unsafe extern "system" fn(*mut c_void, *mut c_void, i32, i32, *const u8) =
-        std::mem::transmute(*functions.add(208));
-    let array = new(env, len);
-    if !array.is_null() {
-        set(env, array, 0, len, bytes.as_ptr());
-    }
-    array
-}
+use crate::android_jni::{direct, output};
+
 #[no_mangle]
 pub unsafe extern "system" fn Java_dev_paimon_probe_LocalizationNative_start(
     env: *mut c_void,

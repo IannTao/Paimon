@@ -10,6 +10,9 @@ import android.widget.Button
 import android.widget.LinearLayout
 import android.widget.ScrollView
 import android.widget.TextView
+import android.widget.EditText
+import android.widget.CheckBox
+import android.text.InputType
 import org.json.JSONObject
 import java.util.concurrent.Executors
 import java.util.concurrent.atomic.AtomicInteger
@@ -29,12 +32,15 @@ class RouteImportActivity : Activity() {
     private var diagnosticPage = 0
     private var selected: RouteImports.Saved? = null
     private lateinit var localization: TextView
+    private lateinit var segmentFirst: EditText
+    private lateinit var segmentLast: EditText
+    private lateinit var diagnostics: CheckBox
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         content = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(24, 24, 24, 24) }
         setContentView(ScrollView(this).apply { addView(content) })
-        label(content, "BetterGI 路线导入与预检\n原文件导入不操作游戏。可检查璃月港地表局部定位；导航、传送和动作尚未实现，当前路线均不能执行。")
+        label(content, "BetterGI 路线导入与预检\n地面导航仅支持璃月港地表、固定屏幕布局和 walk。传送、拾取和其他动作尚未实现。启动前需处于已确认起点附近，运行中自动操作。")
         button(content, "选择路线原文件") {
             @Suppress("DEPRECATION")
             startActivityForResult(Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
@@ -43,6 +49,19 @@ class RouteImportActivity : Activity() {
             }, PICK_ROUTE)
         }
         button(content, "读取已保存路线（离线）") { restore() }
+        button(content, "启动整条地面路线") { startNavigation(0, 0) }
+        segmentFirst = EditText(this).apply { hint = "分段首点序号（原数组，1起算）"; inputType = InputType.TYPE_CLASS_NUMBER; setText("2"); content.addView(this) }
+        segmentLast = EditText(this).apply { hint = "分段末点序号"; inputType = InputType.TYPE_CLASS_NUMBER; setText("4"); content.addView(this) }
+        diagnostics = CheckBox(this).apply { text = "保存本次小地图诊断画面（最多160帧）"; content.addView(this) }
+        button(content, "仅验证导航分段（非原路线通过）") {
+            val first = segmentFirst.text.toString().toIntOrNull()
+            val last = segmentLast.text.toString().toIntOrNull()
+            if (first == null || last == null || first < 1 || last < first) localization.text = "分段序号无效"
+            else startNavigation(first, last)
+        }
+        button(content, "查看上次导航结果") {
+            localization.text = runCatching { NavigationReports.latest(this).toString(2) }.getOrElse { "暂无记录：${it.message}" }
+        }
         button(content, "用截图检查定位（历史画面）") {
             if (selected == null || current?.optString("status") == "invalid") {
                 localization.text = "请先导入合法路线"; return@button
@@ -152,7 +171,35 @@ class RouteImportActivity : Activity() {
         }.onFailure { localization.text = "定位准备未启动：${it.message}" }
     }
 
-    override fun onResume() { super.onResume(); LocalizationService.stopForReturn() }
+    private fun startNavigation(first: Int, last: Int) {
+        val source = selected ?: run { localization.text = "请先导入路线"; return }
+        val report = current ?: return
+        val request = generation.incrementAndGet()
+        localization.text = "正在检查导航范围…"
+        worker.execute {
+            val result = runCatching { NavigationNative.preview(source.bytes, first, last) }
+            runOnUiThread {
+                if (isDestroyed || request != generation.get()) return@runOnUiThread
+                result.onSuccess {
+                    runCatching {
+                        check(Settings.canDrawOverlays(this)) { "请先允许悬浮窗权限" }
+                        check(Shizuku.pingBinder() && Shizuku.getUid() == 2000 && Shizuku.checkSelfPermission() == PackageManager.PERMISSION_GRANTED) { "需要 shell Shizuku 授权" }
+                        val game = checkNotNull(packageManager.getLaunchIntentForPackage(MovementService.GAME))
+                        stopService(Intent(this, MovementService::class.java))
+                        stopService(Intent(this, ProbeService::class.java))
+                        stopService(Intent(this, ReturnOverlayService::class.java))
+                        stopService(Intent(this, LocalizationService::class.java))
+                        startForegroundService(Intent(this, NavigationService::class.java)
+                            .putExtra("routeSha", report.getString("sha256")).putExtra("first", first).putExtra("last", last)
+                            .putExtra("diagnostics", diagnostics.isChecked))
+                        startActivity(game)
+                    }.onFailure { localization.text = "导航未启动：${it.message}" }
+                }.onFailure { localization.text = "导航未启动：${it.message}" }
+            }
+        }
+    }
+
+    override fun onResume() { super.onResume(); LocalizationService.stopForReturn(); NavigationService.stopForReturn() }
 
     private fun render() {
         val report = current ?: return
@@ -194,7 +241,7 @@ class RouteImportActivity : Activity() {
             val d = diagnostics.getJSONObject(i)
             label(preview, "${d.getString("field")}：${d.getString("reason")}")
         }
-        button(preview, "执行路线（尚未开放）") {}.isEnabled = false
+        label(preview, "导航启动按钮位于页面上方；必需传送或动作未支持时禁止整条启动。分段验证单独记录，不算原路线通过。")
     }
 
     private fun range(name: String, count: Int, page: Int, change: (Int) -> Unit): IntRange {

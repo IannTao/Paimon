@@ -16,13 +16,31 @@ fn original_route_previews_in_array_order_but_cannot_execute() {
     assert!(report
         .capabilities
         .iter()
-        .filter(|c| c.field != "world_localization")
-        .all(|c| !c.executable));
+        .any(|c| c.field == "type:teleport" && !c.executable));
+    assert!(report
+        .capabilities
+        .iter()
+        .any(|c| c.field == "move_mode:walk" && c.executable));
     assert!(report
         .capabilities
         .iter()
         .any(|c| c.field == "world_localization" && c.executable));
     assert_eq!(report.original["info"]["authors"][0]["name"], "黎歌");
+}
+
+#[test]
+fn ground_navigation_is_ready_only_inside_its_verified_scope_without_required_actions() {
+    let report = import_route(
+        "derived-validation.json",
+        include_bytes!("fixtures/navigation/derived-ground-orientation.json"),
+    );
+    assert_eq!(report.status, ImportStatus::Executable);
+    assert!(report.capabilities.iter().all(|c| c.executable));
+    let report = import_route(
+        "unsupported.json",
+        br#"{"info":{},"positions":[{"x":268,"y":-665,"type":"target","action":"pick"}]}"#,
+    );
+    assert_eq!(report.status, ImportStatus::Unsupported);
 }
 
 #[test]

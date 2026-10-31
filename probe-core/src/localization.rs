@@ -77,6 +77,7 @@ pub struct LocalizationReport {
     pub position: Option<Position>,
     pub target: Option<Position>,
     pub heading_degrees: Option<f64>,
+    pub map_rotation_degrees: Option<f64>,
     pub navigation_allowed: bool,
     pub reason: String,
     pub inliers: usize,
@@ -163,6 +164,7 @@ impl LocalizationTask {
             position: None,
             target: self.target,
             heading_degrees: None,
+            map_rotation_degrees: None,
             navigation_allowed: false,
             reason: reason.into(),
             inliers: 0,
@@ -195,21 +197,38 @@ impl LocalizationTask {
         query.sort_by(|a, b| b.keypoint.response.total_cmp(&a.keypoint.response));
         query.truncate(400);
         let atlas = atlas();
-        let matches = match_features(&query, atlas, 0.75);
-        let pairs: Vec<_> = matches
-            .iter()
-            .take(80)
-            .map(|m| {
-                let q = &query[m.query_index].keypoint;
-                let t = &atlas[m.train_index].keypoint;
-                ((q.x as f64, q.y as f64), (t.x as f64, t.y as f64))
-            })
-            .collect();
-        let Some((fit, count, error)) = match_geometry(&pairs) else {
+        let match_atlas = |features: &[Feature]| {
+            let matches = match_features(&query, features, 0.75);
+            let pairs: Vec<_> = matches
+                .iter()
+                .take(80)
+                .map(|m| {
+                    let q = &query[m.query_index].keypoint;
+                    let t = &features[m.train_index].keypoint;
+                    ((q.x as f64, q.y as f64), (t.x as f64, t.y as f64))
+                })
+                .collect();
+            match_geometry(&pairs)
+        };
+        let matched = match_atlas(atlas).or_else(|| {
+            // A recent screen fix narrows descriptor candidates, never substitutes for a new match.
+            let (at, previous) = self.previous_fix?;
+            if frame.captured_at.saturating_sub(at) > 1500 {
+                return None;
+            }
+            let (cx, cy) = (640.0 - previous.x, -256.0 - previous.y);
+            let nearby: Vec<_> = atlas
+                .iter()
+                .filter(|f| (f.keypoint.x as f64 - cx).hypot(f.keypoint.y as f64 - cy) < 200.0)
+                .cloned()
+                .collect();
+            match_atlas(&nearby)
+        });
+        let Some((fit, count, error)) = matched else {
             return report;
         };
         let (x, y) = fit.apply(132.0, 132.0);
-        let Some(heading) = arrow_heading(frame.rgb) else {
+        let Some(arrow) = player_arrow(frame.rgb) else {
             report.reason = "角色朝向箭头不清晰".into();
             return report;
         };
@@ -218,13 +237,15 @@ impl LocalizationTask {
             x: 16384.0 - (15744.0 + x),
             y: 12288.0 - (12544.0 + y),
         });
-        report.heading_degrees =
-            Some((heading + fit.b.atan2(fit.a).to_degrees()).rem_euclid(360.0));
+        report.heading_degrees = arrow
+            .heading_degrees
+            .map(|heading| (heading + fit.b.atan2(fit.a).to_degrees()).rem_euclid(360.0));
+        report.map_rotation_degrees = Some(fit.b.atan2(fit.a).to_degrees());
         report.inliers = count;
         report.reprojection_error = Some(error);
         report.captured_at = Some(frame.captured_at);
         report.valid_until = Some(frame.captured_at.saturating_add(1500));
-        report.reason = "璃月港地表图像匹配通过；导航尚未实现".into();
+        report.reason = "璃月港地表图像匹配通过；定位结果不直接授权输入".into();
         report
     }
 }
@@ -314,10 +335,63 @@ fn match_geometry(pairs: &[Pair]) -> Option<(Similarity, usize, f64)> {
     }) {
         return None;
     }
-    Some(best)
+    // The two-point hypothesis selects consensus; fit every inlier to reduce fan-dependent jitter.
+    let inliers: Vec<_> = pairs
+        .iter()
+        .copied()
+        .filter(|&((x, y), (u, v))| {
+            let (px, py) = best.0.apply(x, y);
+            (px - u).hypot(py - v) < 3.0
+        })
+        .collect();
+    let n = inliers.len() as f64;
+    let (qx, qy, tx, ty) = inliers
+        .iter()
+        .fold((0.0, 0.0, 0.0, 0.0), |s, &((x, y), (u, v))| {
+            (s.0 + x, s.1 + y, s.2 + u, s.3 + v)
+        });
+    let (qx, qy, tx, ty) = (qx / n, qy / n, tx / n, ty / n);
+    let (a, b, denominator) = inliers
+        .iter()
+        .fold((0.0, 0.0, 0.0), |s, &((x, y), (u, v))| {
+            let (x, y, u, v) = (x - qx, y - qy, u - tx, v - ty);
+            (
+                s.0 + x * u + y * v,
+                s.1 + x * v - y * u,
+                s.2 + x * x + y * y,
+            )
+        });
+    let (a, b) = (a / denominator, b / denominator);
+    let fit = Similarity {
+        a,
+        b,
+        tx: tx - a * qx + b * qy,
+        ty: ty - b * qx - a * qy,
+    };
+    let (cx, cy) = fit.apply(132.0, 132.0);
+    if !(0.25..3.0).contains(&fit.a.hypot(fit.b))
+        || !(60.0..964.0).contains(&cx)
+        || !(60.0..964.0).contains(&cy)
+    {
+        return None;
+    }
+    let error = (inliers
+        .iter()
+        .map(|&((x, y), (u, v))| {
+            let (px, py) = fit.apply(x, y);
+            (px - u).powi(2) + (py - v).powi(2)
+        })
+        .sum::<f64>()
+        / n)
+        .sqrt();
+    Some((fit, inliers.len(), error))
 }
 
-fn arrow_heading(rgb: &[u8]) -> Option<f64> {
+struct PlayerArrow {
+    heading_degrees: Option<f64>,
+}
+
+fn player_arrow(rgb: &[u8]) -> Option<PlayerArrow> {
     fn cyan(p: &[u8]) -> bool {
         p[0] < 35 && p[1] > 170 && p[2] > 230
     }
@@ -376,5 +450,9 @@ fn arrow_heading(rgb: &[u8]) -> Option<f64> {
         let delta = (angle - best.1).abs();
         delta.min(360.0 - delta) > 25.0 && score < best.0 + 0.05
     });
-    (!ambiguous).then_some(best.1)
+    // The cyan silhouette proves the player marker is present; its nearly triangular
+    // shape can still leave facing ambiguous. Navigation separately observes the camera fan.
+    Some(PlayerArrow {
+        heading_degrees: (!ambiguous).then_some(best.1),
+    })
 }

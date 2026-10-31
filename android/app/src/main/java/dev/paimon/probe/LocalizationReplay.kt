@@ -38,6 +38,6 @@ object LocalizationReplay {
         val target = report.optJSONObject("target")
         val trust = if (report.getString("state") == "located") "图像匹配已通过" else "未获得可信位置"
         return "$coordinates\n朝向：$heading\n目标点（第1个路径点）：${target ?: "无"}\n可信状态：$trust\n${report.getString("reason")}\n" +
-            "地图参照：璃月港地表局部；其他地区/分层未支持\n" + if (historical) "非实时记录，禁止导航" else "导航尚未实现，禁止移动"
+            "地图参照：璃月港地表局部；其他地区/分层未支持\n" + if (historical) "非实时记录，禁止导航" else "只读定位准备，不发出移动输入"
     }
 }

@@ -4,3 +4,5 @@ scripts/*.sh text eol=lf
 /probe-core/assets/*.gray binary
 /probe-core/assets/*.rgb binary
 /probe-core/tests/fixtures/localization/*.png -text
+/probe-core/tests/fixtures/navigation/*.png -text
+/probe-core/tests/fixtures/navigation/orientation-run/*.png -text

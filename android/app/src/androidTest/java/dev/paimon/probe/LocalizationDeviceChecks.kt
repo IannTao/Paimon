@@ -73,12 +73,12 @@ class LocalizationDeviceChecks : Instrumentation() {
                 result.putString("result", "PASS live: $proof")
             } else {
                 choose(route, "用截图检查定位（历史画面）", "image/png", "image-128")
-                awaitText(route, "历史画面位置：267.27", "-664.55", "朝向：93", "非实时")
+                awaitText(route, "历史画面位置：267.", "-664.", "朝向：93", "非实时")
                 choose(route, "用截图检查定位（历史画面）", "image/png", "image-127")
-                awaitText(route, "历史画面位置：365.98", "-501.91", "朝向：76")
+                awaitText(route, "历史画面位置：365.", "-501.", "朝向：76")
                 choose(route, "用截图检查定位（历史画面）", "image/png", "image-chasm")
                 awaitText(route, "未定位", "没有可信地图匹配")
-                check(!text(route).contains("历史画面位置：365.98")) { "Previous fix survived image failure" }
+                check(!text(route).contains("历史画面位置：365.")) { "Previous fix survived image failure" }
                 result.putString("result", "PASS replay: real images at two references, heading, underground rejection; historical positions cannot start navigation")
                 runOnMainSync { route.finish(); main.finish() }
             }

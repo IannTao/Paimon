@@ -33,6 +33,9 @@ public class RouteFixtureProvider extends ContentProvider {
                 else throw new java.io.FileNotFoundException("Unknown image fixture");
                 try (InputStream input = getContext().createPackageContext("dev.paimon.probe.test", 0)
                     .getAssets().open("localization/" + file)) { bytes = input.readAllBytes(); }
+            } else if ("navigation".equals(name)) {
+                try (InputStream input = getContext().createPackageContext("dev.paimon.probe.test", 0)
+                    .getAssets().open("navigation/derived-ground-orientation.json")) { bytes = input.readAllBytes(); }
             } else if ("ground".equals(name) || "flight".equals(name)) {
                 String file = "ground".equals(name) ? "route-1.json" : "route-2.json";
                 try (InputStream input = getContext().createPackageContext("dev.paimon.probe.test", 0)

@@ -157,15 +157,16 @@ pub fn import_route(file_name: &str, bytes: &[u8]) -> ImportReport {
             original: p.clone(),
         })
         .collect();
+    let local_map = crate::localization::supports_route(&report);
     report.capabilities.push(Capability {
         field: "world_localization".into(),
         recognized: true,
-        executable: crate::localization::supports_route(&report),
+        executable: local_map,
     });
     report.error(
         "world_localization",
-        if crate::localization::supports_route(&report) {
-            "仅璃月港地表局部、2480×1116 固定布局的定位准备已验证；实时画面须单独确认，导航未实现"
+        if local_map {
+            "仅璃月港地表局部、2480×1116 固定布局已验证；启动时仍须确认实时位置与运行条件"
         } else {
             "路线不在已验证的璃月港地表定位范围或包含未解释的地图配置"
         },
@@ -173,9 +174,11 @@ pub fn import_route(file_name: &str, bytes: &[u8]) -> ImportReport {
     report.capabilities.push(Capability {
         field: format!("map:{}", report.map_name),
         recognized: report.map_name == "Teyvat",
-        executable: false,
+        executable: local_map,
     });
-    report.error("info.map_name", "地图坐标定位尚未支持，不能执行");
+    if !local_map {
+        report.error("info.map_name", "地图范围或配置未验证，不能执行");
+    }
     let mut extensions = vec![];
     for key in report.original.as_object().unwrap().keys() {
         if !["info", "positions", "config"].contains(&key.as_str()) {
@@ -243,24 +246,29 @@ pub fn import_route(file_name: &str, bytes: &[u8]) -> ImportReport {
                 continue;
             }
             let field = format!("positions[{i}].{key}");
+            let executable = local_map
+                && ((key == "type" && ["path", "target", "orientation"].contains(&value.as_str()))
+                    || (key == "move_mode" && value == "walk"));
             report.capabilities.push(Capability {
                 field: format!("{key}:{value}"),
                 recognized,
-                executable: false,
+                executable,
             });
-            report.error(
-                &field,
-                &format!(
-                    "第 {} 点：{} {}",
-                    i + 1,
-                    value,
-                    if recognized {
-                        "已识别，尚不能执行"
-                    } else {
-                        "未知行为，不能执行"
-                    }
-                ),
-            );
+            if !executable {
+                report.error(
+                    &field,
+                    &format!(
+                        "第 {} 点：{} {}",
+                        i + 1,
+                        value,
+                        if recognized {
+                            "已识别，尚不能执行"
+                        } else {
+                            "未知行为，不能执行"
+                        }
+                    ),
+                );
+            }
         }
     }
     report.capabilities.sort_by(|a, b| a.field.cmp(&b.field));
@@ -273,7 +281,11 @@ pub fn import_route(file_name: &str, bytes: &[u8]) -> ImportReport {
     {
         report.upstream_commit = Some(UPSTREAM_COMMIT.into());
     }
-    report.status = ImportStatus::Unsupported;
+    report.status = if report.capabilities.iter().all(|c| c.executable) {
+        ImportStatus::Executable
+    } else {
+        ImportStatus::Unsupported
+    };
     report
 }
 
