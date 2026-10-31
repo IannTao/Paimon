@@ -158,6 +158,17 @@ pub fn import_route(file_name: &str, bytes: &[u8]) -> ImportReport {
         })
         .collect();
     let local_map = crate::localization::supports_route(&report);
+    if !crate::navigation::within_limits(&report.points) {
+        report.capabilities.push(Capability {
+            field: "navigation_limits".into(),
+            recognized: true,
+            executable: false,
+        });
+        report.error(
+            "navigation_limits",
+            "本轮最多256点；点标识各不超过1KiB，合计不超过64KiB",
+        );
+    }
     report.capabilities.push(Capability {
         field: "world_localization".into(),
         recognized: true,

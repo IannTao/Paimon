@@ -4,6 +4,133 @@ use paimon_probe::{localization::MiniMapFrame, movement::Conditions};
 const ORIGINAL: &[u8] = include_bytes!("fixtures/bettergi/route-1.json");
 
 #[test]
+fn navigation_rejects_unbounded_progress_metadata_without_changing_the_imported_file() {
+    use paimon_probe::route_import::{import_route, ImportStatus};
+    use serde_json_lenient::json;
+    for points in [
+        vec![json!({"x":267,"y":-664}); 257],
+        vec![json!({"id":"a".repeat(1025),"x":267,"y":-664})],
+    ] {
+        let bytes = serde_json_lenient::to_vec(&json!({"info":{},"positions":points})).unwrap();
+        let imported = import_route("large-progress.json", &bytes);
+        assert_eq!(imported.status, ImportStatus::Unsupported);
+        assert_eq!(imported.points.len(), points.len());
+        assert!(NavigationTask::prepare(
+            "large-progress.json",
+            &bytes,
+            NavigationScope::WholeRoute,
+            1000
+        )
+        .is_err());
+    }
+}
+
+#[test]
+fn orientation_followed_by_movement_starts_the_next_leg_at_the_observed_position() {
+    use paimon_probe::navigation::{NavigationCommand, NavigationState};
+    let source = br#"{"info":{},"positions":[{"x":207,"y":-711,"type":"orientation"},{"x":267,"y":-644,"type":"target"}]}"#;
+    let before = image::load_from_memory(include_bytes!("fixtures/navigation/camera-before.png"))
+        .unwrap()
+        .to_rgb8();
+    let after = image::load_from_memory(include_bytes!("fixtures/navigation/camera-after.png"))
+        .unwrap()
+        .to_rgb8();
+    let mut task = NavigationTask::prepare(
+        "turn-then-walk.json",
+        source,
+        NavigationScope::WholeRoute,
+        1000,
+    )
+    .unwrap();
+    task.step(
+        1000,
+        Conditions::Ready,
+        Some(MiniMapFrame {
+            captured_at: 1000,
+            rgb: before.as_raw(),
+        }),
+    );
+    let NavigationCommand::Turn { serial, .. } = task.step(
+        1200,
+        Conditions::Ready,
+        Some(MiniMapFrame {
+            captured_at: 1200,
+            rgb: before.as_raw(),
+        }),
+    ) else {
+        panic!()
+    };
+    task.input_finished(serial, 1400, true, true);
+    for at in [1600, 1800, 2000] {
+        task.step(
+            at,
+            Conditions::Ready,
+            Some(MiniMapFrame {
+                captured_at: at,
+                rgb: after.as_raw(),
+            }),
+        );
+    }
+    assert_eq!(task.report().current_index, 2);
+    assert_ne!(
+        task.report().state,
+        NavigationState::Failed,
+        "{}",
+        task.report().reason
+    );
+    assert_eq!(task.report().completed_points.len(), 1);
+}
+
+#[test]
+fn late_or_backwards_receipts_cannot_bypass_a_deadline_before_the_next_observation() {
+    use paimon_probe::navigation::{NavigationCommand, NavigationState};
+    let image = image::load_from_memory(include_bytes!("fixtures/navigation/camera-before.png"))
+        .unwrap()
+        .to_rgb8();
+    for (tick, receipt) in [(1300, 2201), (1500, 1400), (1300, 122000)] {
+        let mut task = NavigationTask::prepare(
+            "original.json",
+            ORIGINAL,
+            NavigationScope::Segment { first: 3, last: 4 },
+            1000,
+        )
+        .unwrap();
+        task.step(
+            1000,
+            Conditions::Ready,
+            Some(MiniMapFrame {
+                captured_at: 1000,
+                rgb: image.as_raw(),
+            }),
+        );
+        let NavigationCommand::Turn { serial, .. } = task.step(
+            1200,
+            Conditions::Ready,
+            Some(MiniMapFrame {
+                captured_at: 1200,
+                rgb: image.as_raw(),
+            }),
+        ) else {
+            panic!()
+        };
+        task.step(tick, Conditions::Ready, None);
+        task.input_finished(serial, receipt, true, true);
+        assert_eq!(task.report().state, NavigationState::Failed);
+        assert_eq!(
+            task.step(
+                receipt.max(tick) + 200,
+                Conditions::Ready,
+                Some(MiniMapFrame {
+                    captured_at: receipt.max(tick) + 200,
+                    rgb: image.as_raw()
+                })
+            ),
+            NavigationCommand::End
+        );
+    }
+}
+
+#[test]
 fn complete_phone_run_replays_original_bytes_and_real_pixels_through_the_task_entry() {
     use paimon_probe::navigation::{NavigationCommand, NavigationState};
     use serde_json_lenient::Value;

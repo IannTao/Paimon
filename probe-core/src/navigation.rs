@@ -101,6 +101,16 @@ pub struct NavigationTask {
     leg_start: Option<Position>,
 }
 
+pub(crate) fn within_limits(points: &[Point]) -> bool {
+    let sizes: Vec<_> = points
+        .iter()
+        .map(|p| p.original["id"].to_string().len())
+        .collect();
+    points.len() <= 256
+        && sizes.iter().all(|n| *n <= 1024)
+        && sizes.iter().sum::<usize>() <= 64 * 1024
+}
+
 impl NavigationTask {
     pub fn prepare(
         name: &str,
@@ -118,6 +128,11 @@ impl NavigationTask {
         };
         if first == 0 || last < first || last > route.points.len() {
             return Err("分段序号无效".into());
+        }
+        if !within_limits(&route.points[first - 1..last]) {
+            return Err(
+                "本轮导航最多256点，点标识各不超过1KiB、合计不超过64KiB；原文件仍可预览".into(),
+            );
         }
         if !localization::supports_route(&route) {
             return Err("地图、区域或定位配置未验证".into());
@@ -194,6 +209,11 @@ impl NavigationTask {
         self.report.reason = reason.into();
         self.report.position = None;
         self.report.camera_heading_degrees = None;
+        self.report.character_heading_degrees = None;
+        self.report.camera_confidence = None;
+        self.report.captured_at = None;
+        self.report.pending_serial = None;
+        self.pending = None;
         NavigationCommand::End
     }
     pub fn step(
@@ -416,7 +436,7 @@ impl NavigationTask {
             self.settled = 0;
             self.commands_this_point = 0;
             self.stalled_moves = 0;
-            self.leg_start = Some(goal);
+            self.leg_start = Some(if orientation { position } else { goal });
             self.report.current_index += 1;
             if self.report.current_index > self.report.last {
                 self.report.state = NavigationState::Completed;
@@ -526,11 +546,18 @@ impl NavigationTask {
             if pending.serial != serial || pending.finished_at.is_some() {
                 return;
             }
-            if !success || !released || now < pending.created_at {
+            if !success
+                || !released
+                || now < self.last_now
+                || now < pending.created_at
+                || now.saturating_sub(pending.created_at) > 1000
+                || now.saturating_sub(self.started_at) > 120_000
+            {
                 self.fail("输入失败、释放未确认或回执时间无效");
                 return;
             }
             pending.finished_at = Some(now);
+            self.last_now = now;
             self.report.input_released = true;
         }
     }

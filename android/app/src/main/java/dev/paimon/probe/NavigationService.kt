@@ -35,6 +35,9 @@ class NavigationService : Service() {
     private var cleanupReason = ""
     private var payload = JSONObject()
     private val history = JSONArray()
+    private var historyBytes = 0
+    private var historyTruncated = false
+    private var reportingFailed = false
     private val receipts = JSONArray()
     private var frameCount = 0
     private var diagnostics = false
@@ -79,6 +82,7 @@ class NavigationService : Service() {
     }
     override fun onCreate() {
         super.onCreate()
+        NavigationReports.claim(id)
         active = WeakReference(this)
         getSystemService(NotificationManager::class.java).createNotificationChannel(
             NotificationChannel("navigation", "地面导航", NotificationManager.IMPORTANCE_LOW))
@@ -110,7 +114,9 @@ class NavigationService : Service() {
         runCatching {
             check(sha.matches(Regex("[0-9a-f]{64}")))
             check(Shizuku.pingBinder() && Shizuku.getUid() == 2000 && Shizuku.checkSelfPermission() == PackageManager.PERMISSION_GRANTED)
-            running = true; save(); bound = true
+            running = true
+            if (!save()) return START_NOT_STICKY
+            bound = true
             Shizuku.bindUserService(args, connection)
             main.postDelayed({ if (running && !initialized) finish(3, "初始化超时") }, 20_000)
         }.onFailure { finish(2, it.message ?: "不能启动") }
@@ -157,10 +163,15 @@ class NavigationService : Service() {
     }
     private fun accept(value: JSONObject) {
         payload = value
-        if (history.length() < 400) history.put(JSONObject(value.toString()).put("observedAt", SystemClock.elapsedRealtime()))
+        val record = JSONObject(value.toString()).put("observedAt", SystemClock.elapsedRealtime())
+        record.getJSONObject("task").remove("completed_points")
+        val size = record.toString().toByteArray(Charsets.UTF_8).size
+        if (history.length() < 400 && historyBytes + size <= 512 * 1024) {
+            history.put(record); historyBytes += size
+        } else historyTruncated = true
         val task = value.getJSONObject("task")
         overlay?.text = "${if (first == 0) "地面路线" else "仅导航分段"} ${task.optInt("current_index")}/${task.optInt("last")} · ${task.optString("state")}\n${task.optString("reason")} · 点击停止"
-        save()
+        if (!save()) return
         when (value.getJSONObject("command").getString("kind")) {
             "end" -> finish(0, task.getString("reason"))
             "turn", "move" -> execute(value.getJSONObject("command"), task.getLong("captured_at"))
@@ -186,7 +197,7 @@ class NavigationService : Service() {
             main.post {
                 if (!running) return@post
                 result.onSuccess { (receipt, value) ->
-                    receipts.put(JSONObject().put("serial", serial).put("kind", command.getString("kind"))
+                    if (receipts.length() < 400) receipts.put(JSONObject().put("serial", serial).put("kind", command.getString("kind"))
                         .put("success", receipt[0] == 1L).put("released", receipt[1] == 1L)
                         .put("downAt", receipt[2]).put("finishedAt", receipt[3]))
                     accept(value)
@@ -199,7 +210,7 @@ class NavigationService : Service() {
             repeat(8) {
                 if (!running) return@execute
                 val since = runCatching { input.holdingSince(id) }.getOrDefault(0)
-                if (since > 0) { main.post { holdingSince = since; save() }; return@execute }
+                if (since > 0) { main.post { if (running) { holdingSince = since; save() } }; return@execute }
                 Thread.sleep(25)
             }
         }
@@ -211,12 +222,19 @@ class NavigationService : Service() {
         try { File(directory, "$at.png").outputStream().use { bitmap.compress(Bitmap.CompressFormat.PNG, 100, it) } }
         finally { bitmap.recycle() }
     }
-    private fun save() {
-        NavigationReports.save(this, JSONObject().put("runId", id).put("active", running).put("ending", ending)
+    private fun save(): Boolean {
+        val result = runCatching { NavigationReports.save(this, JSONObject().put("runId", id).put("active", running).put("ending", ending)
             .put("routeSha256", sha).put("payload", payload).put("history", history).put("receipts", receipts)
             .put("frames", frameCount).put("releaseConfirmed", releaseConfirmed).put("cleanupReason", cleanupReason)
-            .put("passed", releaseConfirmed && payload.optJSONObject("task")?.optString("state") == "completed")
-            .put("holdingSince", holdingSince).put("heldWhenCancelled", heldWhenCancelled).put("recordedAt", System.currentTimeMillis()))
+            .put("passed", !reportingFailed && releaseConfirmed && payload.optJSONObject("task")?.optString("state") == "completed")
+            .put("historyTruncated", historyTruncated)
+            .put("holdingSince", holdingSince).put("heldWhenCancelled", heldWhenCancelled).put("recordedAt", System.currentTimeMillis())) }
+        if (result.isFailure) {
+            reportingFailed = true
+            cleanupReason = "导航报告保存失败：${result.exceptionOrNull()?.message}"
+            if (!ending) finish(3, cleanupReason)
+        }
+        return result.isSuccess
     }
     private fun finish(condition: Int, reason: String) {
         if (ending) return
@@ -235,7 +253,7 @@ class NavigationService : Service() {
                 releaseConfirmed = released
                 if (final != null) payload = final
                 save()
-                overlay?.text = "$reason\n${if (released) "输入已释放" else "未确认输入释放；任务未通过"}"
+                overlay?.text = "$cleanupReason\n${if (!released) "未确认输入释放；任务未通过" else if (reportingFailed) "输入已释放；结果记录失败" else "输入已释放"}"
                 if (bound) { bound = false; runCatching { Shizuku.unbindUserService(args, connection, true) } }
                 bridge = null
                 main.postDelayed({ stopSelf() }, 1500)
