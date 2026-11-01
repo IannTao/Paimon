@@ -22,26 +22,26 @@ class PickupDeviceChecks : Instrumentation() {
         val result = Bundle()
         try {
             val main = startActivitySync(Intent(targetContext, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK))
-            awaitText(main, "UID 2000 / 授权 true")
+            awaitActivityText(main, "UID 2000 / 授权 true")
             val monitor = addMonitor(RouteImportActivity::class.java.name, null, false)
-            click(main, "导入/查看 BetterGI 路线")
+            clickButton(main, "导入/查看 BetterGI 路线")
             val route = checkNotNull(waitForMonitorWithTimeout(monitor, 5000)); removeMonitor(monitor)
             val filter = IntentFilter(Intent.ACTION_OPEN_DOCUMENT).apply { addCategory(Intent.CATEGORY_OPENABLE); addDataType("*/*") }
             val fixture = if (scenario == "unsupported") "force-tp" else "ground"
             val picker = addMonitor(filter, ActivityResult(Activity.RESULT_OK, Intent().setData(Uri.parse("content://dev.paimon.probe.test.routes/$fixture"))), true)
-            try { click(route, "选择路线原文件"); check(picker.hits > 0) } finally { removeMonitor(picker) }
-            awaitText(route, if (scenario == "unsupported") "路径点：1" else "路径点：7")
+            try { clickButton(route, "选择路线原文件"); check(picker.hits > 0) } finally { removeMonitor(picker) }
+            awaitActivityText(route, if (scenario == "unsupported") "路径点：1" else "路径点：7")
             if (scenario == "unsupported") {
                 val previous = runCatching { NavigationReports.latest(targetContext).getLong("runId") }.getOrNull()
-                click(route, "仅验证首个传送点（非整条通过）")
-                awaitText(route, "传送目标、动作或参数尚未支持")
+                clickButton(route, "仅验证首个传送点（非整条通过）")
+                awaitActivityText(route, "传送目标、动作或参数尚未支持")
                 check(runCatching { NavigationReports.latest(targetContext).getLong("runId") }.getOrNull() == previous)
                 result.putString("result", "PASS unsupported force_tp: no input session started")
                 finish(Activity.RESULT_OK, result); return
             }
-            runOnMainSync { views(route.window.decorView).filterIsInstance<CheckBox>().single().isChecked = true }
+            runOnMainSync { activityViews(route.window.decorView).filterIsInstance<CheckBox>().single().isChecked = true }
             val started = SystemClock.elapsedRealtimeNanos()
-            click(route, "验证首个目标点拾取（非整条采集）")
+            clickButton(route, "验证首个目标点拾取（非整条采集）")
             val until = SystemClock.uptimeMillis() + 195_000
             var proof: JSONObject? = null
             var triggered = false
@@ -84,16 +84,4 @@ class PickupDeviceChecks : Instrumentation() {
             result.putString("result", "PASS $scenario: $report"); finish(Activity.RESULT_OK, result)
         } catch (error: Throwable) { result.putString("error", error.stackTraceToString()); finish(Activity.RESULT_CANCELED, result) }
     }
-    private fun click(activity: Activity, label: String) = runOnMainSync { check(views(activity.window.decorView).filterIsInstance<Button>().single { it.text.toString() == label }.performClick()) }
-    private fun awaitText(activity: Activity, expected: String) {
-        val until = SystemClock.uptimeMillis() + 15000
-        var actual = ""
-        do {
-            runOnMainSync { actual = views(activity.window.decorView).filterIsInstance<TextView>().joinToString("\n") { it.text } }
-            if (actual.contains(expected)) return
-            Thread.sleep(80)
-        } while (SystemClock.uptimeMillis() < until)
-        error("Missing $expected in $actual")
-    }
-    private fun views(view: View): List<View> = listOf(view) + if (view is ViewGroup) (0 until view.childCount).flatMap { views(view.getChildAt(it)) } else emptyList()
 }

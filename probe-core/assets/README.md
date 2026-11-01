@@ -24,3 +24,16 @@
 | map-teleport-button.rgb | map-detail | 1014,495,60,28 | 3c34291233cc4d256491e155306653e5334d475c6f68055eb59ab8ee78c5bad5 |
 
 缩放符号及重叠选项文字使用不透明亮色笔画，不依赖半透明背景地形；选项同时要求暗底。详情标题及传送按钮检查完整图块。模型只开放当前固定中文布局、地表及已验证璃月港锚点；未知布局、层级或不可用目标不能据此猜点。
+
+## #9 拾取视觉模型
+
+固定布局1240×558概览的原始RGB裁切。准备画面、真实运行帧、裁切矩形及验收限制见[画面来源](../tests/fixtures/pickup/README.md)。模型不构成通用OCR或真机验收通过声明；数量独立检查，未知交互不点击。
+
+| 文件 | SHA-256 |
+| --- | --- |
+| pickup-obtained-heading.rgb | 4df52eb569926005d13997ec094fec3bfa1cc96e9139d5c59ce7554d81e530f2 |
+| pickup-obtained-icon.rgb | 2bf6254f12dc6c5068fc1a71ca0523fdc2b793f8e135d349a7bd95e169d2f6a5 |
+| pickup-obtained-quantity.rgb | 156751112ebdc8387819d255291b9209a1d007c907f8cfa92990576599938675 |
+| pickup-obtained-text.rgb | 2b53c8d25a31962ed35472dc4b24bfe86ddde4eed02bf95bcfbebbadd7204c21 |
+| pickup-seed-icon.rgb | c02300fe4283e1419c22e67b6ea083ba5d2062c8307bc8036f3dd0a2fa65f8e6 |
+| pickup-seed-text.rgb | 22624f259b4e94de6bac327188949b0d1bd0df6eccf48e9c2be596bc245a2ec7 |

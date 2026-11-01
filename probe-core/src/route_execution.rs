@@ -1,4 +1,5 @@
-//! Original-byte route execution, including an explicitly scoped teleport validation.
+//! 原始路线字节驱动的任务入口：传送、地面导航和显式单点拾取验证。
+//! 时间使用同一个单调毫秒时钟；输入回执只能证明输入结束，不能证明到点或取得物品。
 use crate::{
     localization::{self, LocalizationTask, MiniMapFrame, Position},
     map_screen,
@@ -14,8 +15,11 @@ use serde::Serialize;
 #[derive(Clone, Copy, Debug, PartialEq, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum ExecutionScope {
+    /// 当前仅执行整条路线的已支持导航语义，不等于完成整条采集。
     WholeRoute,
+    /// 保留整个原文件，但只验证首个传送点。
     FirstTeleport,
+    /// 从原首点执行到第一个target，确认一个物品后交回下一原索引并结束验证。
     FirstPickup,
 }
 
@@ -88,6 +92,8 @@ pub enum RouteCommand {
     End,
 }
 
+/// 两种图像来自同一次截图：小地图保留264×264原像素，界面概览为1240×558 RGB。
+/// 导航阶段可省略概览；地图交互和拾取阶段必须提供概览，不能拼接不同时间的画面。
 pub struct RouteFrame<'a> {
     pub captured_at: u64,
     pub screen: Option<&'a [u8]>,
@@ -134,6 +140,8 @@ pub(crate) fn supported_teleport(point: &Point) -> bool {
 }
 
 impl RouteTask {
+    /// 在发出任何游戏输入前检查整份原文件，包括本轮验证范围之外的未知必需行为。
+    /// 范围只控制何时结束，不重写字节、删除路径点或改变原坐标与动作参数。
     pub fn prepare(
         name: &str,
         bytes: &[u8],
@@ -165,6 +173,7 @@ impl RouteTask {
         if scope == ExecutionScope::FirstTeleport && route.points[0].point_type != "teleport" {
             return Err("首点不是teleport，不能作为首点传送验证".into());
         }
+        // target只提供到达位置；是否存在资源以及是否取得，必须随后由真实画面证明。
         let pickup_target_index = if scope == ExecutionScope::FirstPickup {
             Some(
                 route
@@ -330,6 +339,7 @@ impl RouteTask {
         {
             return self.fail("传送画面过期、重复或时间无效");
         }
+        // 回执成功后仍不能复用操作前的图像；下一决策必须基于释放之后的新截图。
         if self.pending.as_ref().is_some_and(|p| {
             p.released_at.is_none() || p.released_at.is_some_and(|at| frame.captured_at <= at)
         }) {
@@ -518,6 +528,7 @@ impl RouteTask {
         RouteCommand::Observe
     }
     pub fn input_finished(&mut self, serial: u64, now: u64, success: bool, released: bool) {
+        // 终态不可被迟到回执重启；平台最终取消是否释放成功还会独立记录。
         if self.terminal() {
             return;
         }
@@ -553,6 +564,7 @@ impl RouteTask {
                 .skip(first - 1)
                 .find(|p| p.point_type == "teleport")
                 .map_or(self.points.len(), |p| p.index - 1);
+            // 单点拾取复用同一原字节的导航分段，先停在原target处等待拾取证据。
             if let Some(target) = self.report.pickup_target_index {
                 last = last.min(target);
             }
@@ -563,6 +575,7 @@ impl RouteTask {
                 now,
             ) {
                 Ok(mut task) => {
+                    // 普通导航的2.5单位容差不保证进入交互范围；拾取向同一原坐标靠近。
                     if self.report.scope == ExecutionScope::FirstPickup {
                         task.require_pickup_distance();
                     }
@@ -696,6 +709,12 @@ impl RouteTask {
             },
         );
         let Some(position) = pose.position else {
+            // 不把旧位置配上新截图时间发布，也不让失去定位前的半次确认跨帧续用。
+            self.report.position = None;
+            self.report.captured_at = None;
+            self.report.reason = pose.reason;
+            self.samples = 0;
+            self.prompt = None;
             self.missing += 1;
             if self.missing >= 3 {
                 return self.fail("拾取期间无法确认当前位置");
@@ -709,6 +728,7 @@ impl RouteTask {
         }
         self.report.position = Some(position);
         if self.report.phase == ExecutionPhase::PickupConfirm {
+            // 搜索阶段已排除旧通知，且外层保证本帧晚于点击释放；这里只累计连续新证据。
             if pickup_screen::obtained(screen) {
                 self.samples += 1;
                 if self.samples >= 2 {
@@ -722,6 +742,7 @@ impl RouteTask {
                         samples: self.samples,
                     });
                     self.report.pickup_validation_passed = true;
+                    // 到点证据与取得证据分别保留；单点验证只交回进度，不冒充整条通过。
                     self.report.current_index += 1;
                     self.report.state = NavigationState::Completed;
                     self.report.phase = ExecutionPhase::Finished;
@@ -736,12 +757,14 @@ impl RouteTask {
             return RouteCommand::Observe;
         }
         if pickup_screen::obtained(screen) {
+            // 进入范围时已有的获得通知无法归因于本次点击，先等待其消退。
             self.samples = 0;
             self.prompt = None;
             self.report.reason = "已有获得通知，等待消退，不能归因于本次拾取".into();
             return RouteCommand::Observe;
         }
         if let Some(target) = pickup_screen::prompt(screen) {
+            // 两帧中图标和完整名称须在同一行稳定出现，避免淡入或列表跳动时误点。
             if self
                 .prompt
                 .is_some_and(|p| p.0.abs_diff(target.0) <= 6 && p.1.abs_diff(target.1) <= 6)
@@ -777,6 +800,7 @@ impl RouteTask {
         });
         self.report.state = NavigationState::Running;
         self.report.reason = format!("视角搜索{}/6；尚无明确拾取提示", self.search_turns);
+        // 视角搜索同样走单帧租约、串行回执及平台看门狗；每次拖动180ms后释放再观察。
         RouteCommand::Turn { serial, dx: 180 }
     }
 }

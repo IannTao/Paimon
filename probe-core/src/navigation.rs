@@ -113,7 +113,8 @@ pub(crate) fn within_limits(points: &[Point]) -> bool {
 }
 
 impl NavigationTask {
-    // Pickup approaches the same imported coordinate; ordinary navigation keeps its verified radius.
+    // 拾取需要进入交互范围：只收紧同一原坐标的到点容差，不另造拾取位置。
+    // 普通导航仍保留原先真机验证过的2.5单位target容差。
     pub(crate) fn require_pickup_distance(&mut self) {
         self.target_radius = 1.0;
     }

@@ -1,8 +1,11 @@
-//! Fixed-layout, offline visual vocabulary. Unknown interactions never become taps.
+//! 固定中文布局的离线拾取视觉词表，不是通用OCR。
+//! 目前只接受已采样的化种匣琉璃百合提示；文字、图标或布局未知时返回未识别。
+//! 坐标和阈值对应1240×558概览，模型来源与裁切范围见fixtures/pickup/README.md。
 const W: usize = 1240;
 const H: usize = 558;
 
 fn ink(pixel: &[u8]) -> bool {
+    // 中文提示使用亮色低色差笔画；排除大多数彩色地形，保留阴影之外的文字主体。
     pixel.iter().all(|v| *v > 185) && pixel.iter().max().unwrap() - pixel.iter().min().unwrap() < 60
 }
 
@@ -33,8 +36,8 @@ fn icon_matches(rgb: &[u8], model: &[u8], x: usize, y: usize, w: usize, h: usize
     error as usize / (w * h * 3) < 38
 }
 
-// Video preparation and runtime JPEGs differ at antialiased stroke edges. Require
-// mutual coverage of the whole glyph mask within one overview pixel, not just a prefix.
+// 准备录像与运行时JPEG的抗锯齿不同，允许笔画相差一个概览像素。
+// 双向检查整个字形，既要求模型笔画出现，也惩罚画面中多出的笔画，不能只认名称前缀。
 fn glyph_score(rgb: &[u8], model: &[u8], x: usize, y: usize, w: usize, h: usize) -> f64 {
     let mut hits = 0;
     let mut total = 0;
@@ -64,6 +67,7 @@ fn glyph_score(rgb: &[u8], model: &[u8], x: usize, y: usize, w: usize, h: usize)
 }
 
 fn obtained_icon(rgb: &[u8], x: usize, y: usize) -> bool {
+    // 仅比较有色花瓣的通道差，减少昼夜背景亮度变化对图标判据的影响。
     let model = include_bytes!("../assets/pickup-obtained-icon.rgb");
     let mut error = 0i32;
     let mut samples = 0;
@@ -89,6 +93,7 @@ pub(crate) fn prompt(rgb: &[u8]) -> Option<(u32, u32)> {
         return None;
     }
     let model = include_bytes!("../assets/pickup-seed-text.rgb");
+    // 搜索实际交互行，不从世界坐标推断点击位置；输出时转换回全屏像素。
     for y in 165..375 {
         for x in 765..785 {
             if text_score(rgb, model, x, y, 148, 19) > 0.88
@@ -112,6 +117,8 @@ pub(crate) fn obtained(rgb: &[u8]) -> bool {
     if rgb.len() != W * H * 3 {
         return false;
     }
+    // 必须同时确认物品全名、独立数字1、右侧无追加数字、获得标题和花瓣图标。
+    // 数字仅占整行少量笔画，单靠整行分数会误接受数量缺失或×11，故单独强制匹配。
     for y in 250..355 {
         for x in 143..156 {
             if text_score(
@@ -130,6 +137,27 @@ pub(crate) fn obtained(rgb: &[u8]) -> bool {
                     88,
                     20,
                 ) > 0.93
+                && text_score(
+                    rgb,
+                    include_bytes!("../assets/pickup-obtained-quantity.rgb"),
+                    x + 76,
+                    y,
+                    12,
+                    20,
+                ) > 0.5
+                && glyph_score(
+                    rgb,
+                    include_bytes!("../assets/pickup-obtained-quantity.rgb"),
+                    x + 76,
+                    y,
+                    12,
+                    20,
+                ) > 0.9
+                && (0..20)
+                    .flat_map(|row| (88..100).map(move |col| (row, col)))
+                    .filter(|(row, col)| ink(&rgb[((y + row) * W + x + col) * 3..][..3]))
+                    .count()
+                    < 4
                 && glyph_score(
                     rgb,
                     include_bytes!("../assets/pickup-obtained-heading.rgb"),

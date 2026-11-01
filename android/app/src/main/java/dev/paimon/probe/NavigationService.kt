@@ -150,6 +150,7 @@ class NavigationService : Service() {
         val input = bridge ?: return finish(2, "输入服务不可用")
         busy = true
         busySince = SystemClock.elapsedRealtime()
+        // 地面导航只需无损小地图；传送和拾取还需同次截图的界面概览。
         val full = routeExecution && payload.optJSONObject("task")?.optString("phase") != "navigation"
         worker.execute {
             val result = runCatching {
@@ -158,6 +159,7 @@ class NavigationService : Service() {
                 val frame = RouteScreenFrame.decode(if (full) input.captureScreen(id) else input.capture(id), full)
                 if (diagnostics && frameCount < 160) {
                     saveFrame(frame.mini, frame.capturedAt)
+                    // 概览单独计数，不能让前面的导航小地图耗尽到点后的拾取诊断预算。
                     if (frame.jpeg != null && screenCount < 64) {
                         File(filesDir, "navigation-frames/$id/${frame.capturedAt}-screen.jpg").writeBytes(frame.jpeg)
                         screenCount++
@@ -175,6 +177,7 @@ class NavigationService : Service() {
     }
     private fun accept(value: JSONObject) {
         payload = value
+        // 旧手势的按住时间不能被当成当前手势的真机停止证据；等待shell观察到实际DOWN。
         if (value.getJSONObject("command").getString("kind") in listOf("turn", "move", "tap")) holdingSince = 0
         val record = JSONObject(value.toString()).put("observedAt", SystemClock.elapsedRealtime())
         record.getJSONObject("task").remove("completed_points")

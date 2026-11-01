@@ -4,6 +4,7 @@ import java.nio.ByteBuffer
 import org.json.JSONObject
 
 object RouteExecutionNative {
+    // JNI只传原文件和同次截图的像素；识别结果、到点及取得证据由Rust任务统一判定。
     init { System.loadLibrary("paimon_probe") }
     @JvmStatic private external fun plan(route: ByteBuffer, scope: Int): ByteArray?
     @JvmStatic private external fun start(id: Long, route: ByteBuffer, scope: Int, now: Long): ByteArray?
@@ -15,6 +16,7 @@ object RouteExecutionNative {
         check(!value.has("error")) { value.optString("error") }; return value
     }
     private fun scope(firstOnly: Boolean, firstPickup: Boolean): Int {
+        // 显式区分两类局部验证，避免把“首点传送”和“首目标拾取”同时启用。
         require(!(firstOnly && firstPickup)) { "执行范围冲突" }
         return if (firstPickup) 2 else if (firstOnly) 1 else 0
     }

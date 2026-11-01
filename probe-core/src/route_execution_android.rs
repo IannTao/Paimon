@@ -7,6 +7,7 @@ use crate::{
 use std::{ffi::c_void, sync::Mutex};
 static TASK: Mutex<Option<(i64, RouteTask)>> = Mutex::new(None);
 fn scope(code: i32) -> Result<ExecutionScope, String> {
+    // 与Kotlin适配层约定的范围码；未知值拒绝，不能意外退回整条路线执行。
     match code {
         0 => Ok(ExecutionScope::WholeRoute),
         1 => Ok(ExecutionScope::FirstTeleport),

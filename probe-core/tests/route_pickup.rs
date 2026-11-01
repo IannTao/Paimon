@@ -7,6 +7,89 @@ use paimon_probe::{
 const ORIGINAL: &[u8] = include_bytes!("fixtures/bettergi/route-1.json");
 
 #[test]
+fn the_original_file_replays_real_teleport_navigation_and_pickup_without_manual_coordinates() {
+    let recorded: serde_json_lenient::Value = serde_json_lenient::from_slice(include_bytes!(
+        "../../docs/validation/reports/issue-9/picked-but-unconfirmed.json"
+    ))
+    .unwrap();
+    let history = recorded["history"].as_array().unwrap();
+    let mut task = RouteTask::prepare(
+        "original.json",
+        ORIGINAL,
+        ExecutionScope::FirstPickup,
+        history[0]["observedAt"].as_u64().unwrap(),
+    )
+    .unwrap();
+    let directory =
+        std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/pickup/phone-run");
+    let mut files: Vec<_> = std::fs::read_dir(&directory)
+        .unwrap()
+        .map(|e| e.unwrap().path())
+        .filter(|p| p.extension().is_some_and(|e| e == "png"))
+        .collect();
+    files.sort();
+    let mut images = files.iter();
+    let mut pending = None;
+    for entry in &history[1..] {
+        let now = entry["observedAt"].as_u64().unwrap();
+        if let Some(serial) = pending.take() {
+            task.input_finished(serial, now, true, true);
+            continue;
+        }
+        let file = images.next().unwrap();
+        let stem = file.file_stem().unwrap().to_str().unwrap();
+        let mini = image::open(file).unwrap().to_rgb8();
+        let screen = image::open(directory.join(format!("{stem}-screen.jpg")))
+            .ok()
+            .map(|im| im.to_rgb8());
+        let command = task.step(
+            now,
+            Conditions::Ready,
+            Some(RouteFrame {
+                captured_at: stem.parse().unwrap(),
+                minimap: mini.as_raw(),
+                screen: screen.as_ref().map(|im| im.as_raw().as_slice()),
+            }),
+        );
+        if task.report().pickup_validation_passed {
+            break;
+        }
+        assert_eq!(
+            serde_json_lenient::to_value(command).unwrap(),
+            entry["command"],
+            "frame {stem}: {}",
+            task.report().reason
+        );
+        pending = match command {
+            RouteCommand::Tap { serial, .. }
+            | RouteCommand::Turn { serial, .. }
+            | RouteCommand::Move { serial, .. } => Some(serial),
+            _ => None,
+        };
+    }
+    assert!(
+        task.report().pickup_validation_passed,
+        "{}",
+        task.report().reason
+    );
+    assert!(task.report().teleport_validation_passed && !task.report().original_route_passed);
+    assert_eq!(task.report().current_index, 5);
+    assert_eq!(
+        task.report()
+            .completed_points
+            .iter()
+            .map(|p| p.index)
+            .collect::<Vec<_>>(),
+        vec![1, 2, 3, 4]
+    );
+    assert_eq!(
+        task.report().pickup_evidence.as_ref().unwrap().original_id,
+        4
+    );
+    assert_eq!(task.report().command_count, 51);
+}
+
+#[test]
 fn first_pickup_keeps_the_original_route_identity_and_plans_the_first_target_only() {
     let task =
         RouteTask::prepare("original.json", ORIGINAL, ExecutionScope::FirstPickup, 1000).unwrap();
@@ -168,7 +251,14 @@ fn unknown_or_absent_prompts_only_allow_six_bounded_camera_searches() {
 
 #[test]
 fn disappearance_or_incomplete_obtained_notification_never_proves_an_item() {
-    for name in ["no-resource", "no-heading", "no-quantity", "seed-prompt"] {
+    for name in [
+        "no-resource",
+        "no-heading",
+        "no-quantity",
+        "missing-digit",
+        "extra-digit",
+        "seed-prompt",
+    ] {
         let mut task = at_target();
         frame(&mut task, 1400, Some("seed-prompt"));
         let RouteCommand::Tap { serial, .. } = frame(&mut task, 1600, Some("seed-prompt")) else {
@@ -232,4 +322,36 @@ fn every_interruption_cancels_camera_and_pickup_input_and_late_callbacks_cannot_
             );
         }
     }
+}
+
+#[test]
+fn missing_position_revokes_its_timestamp_and_requires_fresh_consecutive_prompt_evidence() {
+    let mut task = at_target();
+    frame(&mut task, 1400, Some("seed-prompt"));
+    let screen = image::load_from_memory(include_bytes!("fixtures/pickup/seed-prompt.jpg"))
+        .unwrap()
+        .to_rgb8();
+    let lost = vec![0; 264 * 264 * 3];
+    assert_eq!(
+        task.step(
+            1600,
+            Conditions::Ready,
+            Some(RouteFrame {
+                captured_at: 1600,
+                minimap: &lost,
+                screen: Some(screen.as_raw())
+            })
+        ),
+        RouteCommand::Observe
+    );
+    assert!(task.report().position.is_none() && task.report().captured_at.is_none());
+    assert!(task.report().reason.contains("地图匹配"));
+    assert_eq!(
+        frame(&mut task, 1800, Some("seed-prompt")),
+        RouteCommand::Observe
+    );
+    assert!(matches!(
+        frame(&mut task, 2000, Some("seed-prompt")),
+        RouteCommand::Tap { .. }
+    ));
 }

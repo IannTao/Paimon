@@ -40,7 +40,7 @@ class RouteImportActivity : Activity() {
         super.onCreate(savedInstanceState)
         content = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(24, 24, 24, 24) }
         setContentView(ScrollView(this).apply { addView(content) })
-        label(content, "BetterGI 路线导入与预检\n当前验证范围为璃月港地表、固定布局、walk及基础空动作传送。未知锚点、force_tp、拾取和其他动作不支持；运行中自动操作。")
+        label(content, "BetterGI 路线导入与预检\n范围为璃月港地表、固定布局、walk及基础空动作传送。单点拾取目前只识别化种匣的琉璃百合中文提示；未知锚点、force_tp及其他动作不支持。整条路线按钮仅导航；单点拾取不代表完整采集。运行中自动操作。")
         button(content, "选择路线原文件") {
             @Suppress("DEPRECATION")
             startActivityForResult(Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
