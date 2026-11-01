@@ -99,6 +99,7 @@ pub struct NavigationTask {
     commands_this_point: u64,
     stalled_moves: usize,
     leg_start: Option<Position>,
+    target_radius: f64,
 }
 
 pub(crate) fn within_limits(points: &[Point]) -> bool {
@@ -112,6 +113,10 @@ pub(crate) fn within_limits(points: &[Point]) -> bool {
 }
 
 impl NavigationTask {
+    // Pickup approaches the same imported coordinate; ordinary navigation keeps its verified radius.
+    pub(crate) fn require_pickup_distance(&mut self) {
+        self.target_radius = 1.0;
+    }
     pub fn prepare(
         name: &str,
         bytes: &[u8],
@@ -187,6 +192,7 @@ impl NavigationTask {
             settled: 0,
             previous_position: None,
             camera_gain: None,
+            target_radius: 2.5,
             started_at: now,
             last_now: now,
             missing: 0,
@@ -407,7 +413,7 @@ impl NavigationTask {
         } else {
             remaining
                 <= if point.point_type == "target" {
-                    2.5
+                    self.target_radius
                 } else {
                     5.0
                 }
@@ -471,7 +477,7 @@ impl NavigationTask {
         }
         if !orientation {
             let tolerance = if point.point_type == "target" {
-                2.5
+                self.target_radius
             } else {
                 5.0
             };

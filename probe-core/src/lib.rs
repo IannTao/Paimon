@@ -6,6 +6,7 @@ pub mod localization;
 mod map_screen;
 pub mod movement;
 pub mod navigation;
+mod pickup_screen;
 pub mod route_execution;
 
 #[cfg(target_os = "android")]

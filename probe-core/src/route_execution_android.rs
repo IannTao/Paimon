@@ -6,11 +6,12 @@ use crate::{
 };
 use std::{ffi::c_void, sync::Mutex};
 static TASK: Mutex<Option<(i64, RouteTask)>> = Mutex::new(None);
-fn scope(first_only: u8) -> ExecutionScope {
-    if first_only != 0 {
-        ExecutionScope::FirstTeleport
-    } else {
-        ExecutionScope::WholeRoute
+fn scope(code: i32) -> Result<ExecutionScope, String> {
+    match code {
+        0 => Ok(ExecutionScope::WholeRoute),
+        1 => Ok(ExecutionScope::FirstTeleport),
+        2 => Ok(ExecutionScope::FirstPickup),
+        _ => Err("未知路线执行范围".into()),
     }
 }
 fn payload(task: &RouteTask, command: RouteCommand) -> serde_json_lenient::Value {
@@ -21,12 +22,12 @@ pub unsafe extern "system" fn Java_dev_paimon_probe_RouteExecutionNative_plan(
     env: *mut c_void,
     _: *mut c_void,
     bytes: *mut c_void,
-    first_only: u8,
+    scope_code: i32,
 ) -> *mut c_void {
     let Some(bytes) = direct(env, bytes, crate::route_import::MAX_BYTES) else {
         return std::ptr::null_mut();
     };
-    match RouteTask::prepare("selected-route.json", bytes, scope(first_only), 0) {
+    match scope(scope_code).and_then(|s| RouteTask::prepare("selected-route.json", bytes, s, 0)) {
         Ok(task) => output(env, &payload(&task, RouteCommand::Observe)),
         Err(error) => output(env, &serde_json_lenient::json!({"error":error})),
     }
@@ -37,7 +38,7 @@ pub unsafe extern "system" fn Java_dev_paimon_probe_RouteExecutionNative_start(
     _: *mut c_void,
     id: i64,
     bytes: *mut c_void,
-    first_only: u8,
+    scope_code: i32,
     now: i64,
 ) -> *mut c_void {
     if id <= 0 || now < 0 {
@@ -46,7 +47,8 @@ pub unsafe extern "system" fn Java_dev_paimon_probe_RouteExecutionNative_start(
     let Some(bytes) = direct(env, bytes, crate::route_import::MAX_BYTES) else {
         return std::ptr::null_mut();
     };
-    let task = match RouteTask::prepare("selected-route.json", bytes, scope(first_only), now as u64)
+    let task = match scope(scope_code)
+        .and_then(|s| RouteTask::prepare("selected-route.json", bytes, s, now as u64))
     {
         Ok(t) => t,
         Err(error) => return output(env, &serde_json_lenient::json!({"error":error})),

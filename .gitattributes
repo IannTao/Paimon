@@ -10,3 +10,7 @@ scripts/*.sh text eol=lf
 /probe-core/tests/fixtures/teleport/*.jpg -text
 /probe-core/tests/fixtures/teleport/phone-run/*.png -text
 /probe-core/tests/fixtures/teleport/phone-run/*.jpg -text
+/probe-core/tests/fixtures/pickup/*.png -text
+/probe-core/tests/fixtures/pickup/*.jpg -text
+/probe-core/tests/fixtures/pickup/phone-run/*.png -text
+/probe-core/tests/fixtures/pickup/phone-run/*.jpg -text

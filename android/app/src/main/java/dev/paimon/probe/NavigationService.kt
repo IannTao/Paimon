@@ -39,6 +39,7 @@ class NavigationService : Service() {
     private var reportingFailed = false
     private val receipts = JSONArray()
     private var frameCount = 0
+    private var screenCount = 0
     private var diagnostics = false
     private var holdingSince = 0L
     private var heldWhenCancelled = false
@@ -50,6 +51,7 @@ class NavigationService : Service() {
     private var sha = ""
     private var routeExecution = false
     private var firstTeleportOnly = false
+    private var firstPickup = false
     private val args by lazy {
         Shizuku.UserServiceArgs(ComponentName(this, NavigationInputService::class.java))
             .tag("navigation-$id").daemon(false).processNameSuffix("navigation").version(1)
@@ -67,9 +69,9 @@ class NavigationService : Service() {
                     check(running)
                     val source = RouteImports(this@NavigationService).load()
                     check(RouteNative.prepare(source.name, source.bytes).getString("sha256") == sha) { "路线已改变" }
-                    if (routeExecution) RouteExecutionNative.preview(source.bytes, firstTeleportOnly) else NavigationNative.preview(source.bytes, first, last)
+                    if (routeExecution) RouteExecutionNative.preview(source.bytes, firstTeleportOnly, firstPickup) else NavigationNative.preview(source.bytes, first, last)
                     input.begin(id)
-                    if (routeExecution) RouteExecutionNative.begin(id, source.bytes, firstTeleportOnly, SystemClock.elapsedRealtime())
+                    if (routeExecution) RouteExecutionNative.begin(id, source.bytes, firstTeleportOnly, SystemClock.elapsedRealtime(), firstPickup)
                     else NavigationNative.begin(id, source.bytes, first, last, SystemClock.elapsedRealtime())
                 }
                 main.post {
@@ -112,6 +114,7 @@ class NavigationService : Service() {
         first = intent.getIntExtra("first", 0); last = intent.getIntExtra("last", 0)
         routeExecution = intent.getBooleanExtra("routeExecution", false)
         firstTeleportOnly = intent.getBooleanExtra("firstTeleportOnly", false)
+        firstPickup = intent.getBooleanExtra("firstPickup", false)
         main.postDelayed({ finish(3, "路线会话达到期限") }, if (routeExecution) 190_000 else 130_000)
         diagnostics = intent.getBooleanExtra("diagnostics", false)
         sha = intent.getStringExtra("routeSha").orEmpty()
@@ -155,7 +158,10 @@ class NavigationService : Service() {
                 val frame = RouteScreenFrame.decode(if (full) input.captureScreen(id) else input.capture(id), full)
                 if (diagnostics && frameCount < 160) {
                     saveFrame(frame.mini, frame.capturedAt)
-                    if (frame.jpeg != null && frameCount < 64) File(filesDir, "navigation-frames/$id/${frame.capturedAt}-screen.jpg").writeBytes(frame.jpeg)
+                    if (frame.jpeg != null && screenCount < 64) {
+                        File(filesDir, "navigation-frames/$id/${frame.capturedAt}-screen.jpg").writeBytes(frame.jpeg)
+                        screenCount++
+                    }
                 }
                 if (routeExecution) RouteExecutionNative.step(id, SystemClock.elapsedRealtime(), capturedAt = frame.capturedAt, mini = frame.mini, screen = frame.screen)
                 else NavigationNative.step(id, SystemClock.elapsedRealtime(), capturedAt = frame.capturedAt, pixels = frame.mini)
@@ -169,6 +175,7 @@ class NavigationService : Service() {
     }
     private fun accept(value: JSONObject) {
         payload = value
+        if (value.getJSONObject("command").getString("kind") in listOf("turn", "move", "tap")) holdingSince = 0
         val record = JSONObject(value.toString()).put("observedAt", SystemClock.elapsedRealtime())
         record.getJSONObject("task").remove("completed_points")
         val size = record.toString().toByteArray(Charsets.UTF_8).size
@@ -176,7 +183,7 @@ class NavigationService : Service() {
             history.put(record); historyBytes += size
         } else historyTruncated = true
         val task = value.getJSONObject("task")
-        overlay?.text = "${if (firstTeleportOnly) "仅首点传送" else if (first == 0) "原路线" else "仅导航分段"} ${task.optInt("current_index")}/${task.optInt("last")} · ${task.optString("state")}\n${task.optString("reason")} · 点击停止"
+        overlay?.text = "${if (firstPickup) "仅首个目标拾取" else if (firstTeleportOnly) "仅首点传送" else if (first == 0) "原路线" else "仅导航分段"} ${task.optInt("current_index")}/${task.optInt("last")} · ${task.optString("state")}\n${task.optString("reason")} · 点击停止"
         if (!save()) return
         when (value.getJSONObject("command").getString("kind")) {
             "end" -> finish(0, task.getString("reason"))
@@ -234,6 +241,7 @@ class NavigationService : Service() {
         val result = runCatching { NavigationReports.save(this, JSONObject().put("runId", id).put("active", running).put("ending", ending)
             .put("routeSha256", sha).put("payload", payload).put("history", history).put("receipts", receipts)
             .put("frames", frameCount).put("releaseConfirmed", releaseConfirmed).put("cleanupReason", cleanupReason)
+            .put("screenFrames", screenCount)
             .put("passed", !reportingFailed && releaseConfirmed && payload.optJSONObject("task")?.optString("state") == "completed")
             .put("historyTruncated", historyTruncated)
             .put("holdingSince", holdingSince).put("heldWhenCancelled", heldWhenCancelled).put("recordedAt", System.currentTimeMillis())) }

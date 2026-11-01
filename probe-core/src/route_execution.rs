@@ -6,6 +6,7 @@ use crate::{
     navigation::{
         self, NavigationCommand, NavigationScope, NavigationState, NavigationTask, PointEvidence,
     },
+    pickup_screen,
     route_import::{import_route, ImportStatus, Point},
 };
 use serde::Serialize;
@@ -15,6 +16,7 @@ use serde::Serialize;
 pub enum ExecutionScope {
     WholeRoute,
     FirstTeleport,
+    FirstPickup,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Serialize)]
@@ -26,6 +28,8 @@ pub enum ExecutionPhase {
     AnchorDetails,
     Loading,
     Navigation,
+    PickupSearch,
+    PickupConfirm,
     Finished,
 }
 
@@ -40,6 +44,9 @@ pub struct ExecutionReport {
     pub reason: String,
     pub original_route_passed: bool,
     pub teleport_validation_passed: bool,
+    pub pickup_target_index: Option<usize>,
+    pub pickup_validation_passed: bool,
+    pub pickup_evidence: Option<PickupEvidence>,
     pub completed_points: Vec<PointEvidence>,
     pub command_count: u64,
     pub move_count: u64,
@@ -50,6 +57,17 @@ pub struct ExecutionReport {
     pub pending_serial: Option<u64>,
     pub loading_observed: bool,
     pub map_target: Option<MapTargetEvidence>,
+}
+
+#[derive(Debug, Serialize)]
+pub struct PickupEvidence {
+    pub target_index: usize,
+    pub original_id: serde_json_lenient::Value,
+    pub item: String,
+    pub quantity: u32,
+    pub prompt_captured_at: u64,
+    pub obtained_captured_at: u64,
+    pub samples: usize,
 }
 
 #[derive(Debug, Serialize)]
@@ -98,6 +116,10 @@ pub struct RouteTask {
     missing: usize,
     ground: Option<NavigationTask>,
     teleport_started_at: u64,
+    search_turns: usize,
+    prompt: Option<(u32, u32)>,
+    prompt_at: u64,
+    pickup_clicked_at: u64,
 }
 
 pub(crate) fn supported_teleport(point: &Point) -> bool {
@@ -143,6 +165,18 @@ impl RouteTask {
         if scope == ExecutionScope::FirstTeleport && route.points[0].point_type != "teleport" {
             return Err("首点不是teleport，不能作为首点传送验证".into());
         }
+        let pickup_target_index = if scope == ExecutionScope::FirstPickup {
+            Some(
+                route
+                    .points
+                    .iter()
+                    .find(|p| p.point_type == "target")
+                    .ok_or("路线没有可验证拾取的target点")?
+                    .index,
+            )
+        } else {
+            None
+        };
         Ok(Self {
             localization: LocalizationTask::new(&route),
             started_at: now,
@@ -156,6 +190,10 @@ impl RouteTask {
             missing: 0,
             ground: None,
             teleport_started_at: now,
+            search_turns: 0,
+            prompt: None,
+            prompt_at: 0,
+            pickup_clicked_at: 0,
             report: ExecutionReport {
                 source_sha256: route.sha256,
                 scope,
@@ -166,6 +204,9 @@ impl RouteTask {
                 reason: "等待真实起始画面".into(),
                 original_route_passed: false,
                 teleport_validation_passed: false,
+                pickup_target_index,
+                pickup_validation_passed: false,
+                pickup_evidence: None,
                 completed_points: vec![],
                 command_count: 0,
                 move_count: 0,
@@ -256,6 +297,18 @@ impl RouteTask {
             return self.fail("传送时钟无效或超过45秒期限");
         }
         self.last_now = now;
+        if matches!(
+            self.report.phase,
+            ExecutionPhase::PickupSearch | ExecutionPhase::PickupConfirm
+        ) && now.saturating_sub(self.teleport_started_at) > 18_000
+        {
+            return self.fail("拾取搜索超过18秒，未确认取得物品");
+        }
+        if self.report.phase == ExecutionPhase::PickupConfirm
+            && now.saturating_sub(self.pickup_clicked_at) > 5000
+        {
+            return self.fail("点击后5秒内未确认取得物品；提示消失不算成功");
+        }
         if self.report.phase == ExecutionPhase::Preparing
             && now.saturating_sub(self.teleport_started_at) > 5000
         {
@@ -456,6 +509,10 @@ impl RouteTask {
                 }
             }
             ExecutionPhase::Navigation => return self.ground_step(now, frame),
+            ExecutionPhase::PickupSearch => {
+                return self.pickup_step(now, frame);
+            }
+            ExecutionPhase::PickupConfirm => return self.pickup_step(now, frame),
             ExecutionPhase::Finished => return self.fail("路线阶段已结束，不能继续输入"),
         }
         RouteCommand::Observe
@@ -490,19 +547,27 @@ impl RouteTask {
     fn ground_step(&mut self, now: u64, frame: RouteFrame<'_>) -> RouteCommand {
         if self.ground.is_none() {
             let first = self.report.current_index;
-            let last = self
+            let mut last = self
                 .points
                 .iter()
                 .skip(first - 1)
                 .find(|p| p.point_type == "teleport")
                 .map_or(self.points.len(), |p| p.index - 1);
+            if let Some(target) = self.report.pickup_target_index {
+                last = last.min(target);
+            }
             match NavigationTask::prepare(
                 "selected-route.json",
                 &self.bytes,
                 NavigationScope::Segment { first, last },
                 now,
             ) {
-                Ok(task) => self.ground = Some(task),
+                Ok(mut task) => {
+                    if self.report.scope == ExecutionScope::FirstPickup {
+                        task.require_pickup_distance();
+                    }
+                    self.ground = Some(task);
+                }
                 Err(error) => return self.fail(&error),
             }
         }
@@ -540,6 +605,18 @@ impl RouteTask {
         }
         if r.state == NavigationState::Completed {
             self.ground = None;
+            if let Some(target) = self.report.pickup_target_index {
+                if self.report.current_index == target + 1 {
+                    self.report.current_index = target;
+                    self.report.phase = ExecutionPhase::PickupSearch;
+                    self.teleport_started_at = now;
+                    self.samples = 0;
+                    self.localization =
+                        LocalizationTask::new(&import_route("selected-route.json", &self.bytes));
+                    self.report.reason = "到达target，尚未取得物品".into();
+                    return RouteCommand::Observe;
+                }
+            }
             if self.report.current_index > self.report.last {
                 self.report.state = NavigationState::Completed;
                 self.report.phase = ExecutionPhase::Finished;
@@ -605,5 +682,101 @@ impl RouteTask {
         self.report.position = None;
         self.localization =
             LocalizationTask::new(&import_route("selected-route.json", &self.bytes));
+    }
+
+    fn pickup_step(&mut self, now: u64, frame: RouteFrame<'_>) -> RouteCommand {
+        let Some(screen) = frame.screen else {
+            return self.fail("缺少拾取界面画面");
+        };
+        let pose = self.localization.observe(
+            now,
+            MiniMapFrame {
+                captured_at: frame.captured_at,
+                rgb: frame.minimap,
+            },
+        );
+        let Some(position) = pose.position else {
+            self.missing += 1;
+            if self.missing >= 3 {
+                return self.fail("拾取期间无法确认当前位置");
+            }
+            return RouteCommand::Observe;
+        };
+        self.missing = 0;
+        let point = &self.points[self.report.current_index - 1];
+        if (position.x - point.x).hypot(position.y - point.y) > 4.0 {
+            return self.fail("拾取期间偏离原target，停止输入");
+        }
+        self.report.position = Some(position);
+        if self.report.phase == ExecutionPhase::PickupConfirm {
+            if pickup_screen::obtained(screen) {
+                self.samples += 1;
+                if self.samples >= 2 {
+                    self.report.pickup_evidence = Some(PickupEvidence {
+                        target_index: point.index,
+                        original_id: point.original["id"].clone(),
+                        item: "琉璃百合".into(),
+                        quantity: 1,
+                        prompt_captured_at: self.prompt_at,
+                        obtained_captured_at: frame.captured_at,
+                        samples: self.samples,
+                    });
+                    self.report.pickup_validation_passed = true;
+                    self.report.current_index += 1;
+                    self.report.state = NavigationState::Completed;
+                    self.report.phase = ExecutionPhase::Finished;
+                    self.report.reason =
+                        "首个target取得单个物品已确认；下一点已交回路线进度，未验证整条采集".into();
+                    return RouteCommand::End;
+                }
+            } else {
+                self.samples = 0;
+            }
+            self.report.reason = "等待新出现的获得琉璃百合×1通知与第二帧确认".into();
+            return RouteCommand::Observe;
+        }
+        if pickup_screen::obtained(screen) {
+            self.samples = 0;
+            self.prompt = None;
+            self.report.reason = "已有获得通知，等待消退，不能归因于本次拾取".into();
+            return RouteCommand::Observe;
+        }
+        if let Some(target) = pickup_screen::prompt(screen) {
+            if self
+                .prompt
+                .is_some_and(|p| p.0.abs_diff(target.0) <= 6 && p.1.abs_diff(target.1) <= 6)
+            {
+                self.samples += 1;
+            } else {
+                self.samples = 1;
+                self.prompt = Some(target);
+            }
+            self.report.reason = "已识别直接拾取图标及完整中文提示，等待新帧复核".into();
+            if self.samples >= 2 {
+                self.prompt_at = frame.captured_at;
+                self.pickup_clicked_at = now;
+                return self.tap(now, target.0, target.1, ExecutionPhase::PickupConfirm);
+            }
+            return RouteCommand::Observe;
+        }
+        self.samples = 0;
+        self.prompt = None;
+        if self.search_turns >= 6 {
+            return self.fail("六次视角搜索仍无明确拾取提示，不点击未知交互");
+        }
+        self.search_turns += 1;
+        self.report.command_count += 1;
+        let serial = self.report.command_count;
+        self.report.input_released = false;
+        self.report.pending_serial = Some(serial);
+        self.pending = Some(Pending {
+            serial,
+            created_at: now,
+            released_at: None,
+            ground_serial: None,
+        });
+        self.report.state = NavigationState::Running;
+        self.report.reason = format!("视角搜索{}/6；尚无明确拾取提示", self.search_turns);
+        RouteCommand::Turn { serial, dx: 180 }
     }
 }
