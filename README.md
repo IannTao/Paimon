@@ -1,10 +1,10 @@
 # Paimon
 
-开发工单统一在 [GitHub Issues](https://github.com/IannTao/Paimon/issues) 跟踪，见[开发总览](https://github.com/IannTao/Paimon/issues/1)与[编号映射](docs/issues/index.md)。已实现 [#16：路径点导入](https://github.com/IannTao/Paimon/issues/16)、[#17：璃月港地表局部定位](https://github.com/IannTao/Paimon/issues/17)及 [#18：按点地面导航](https://github.com/IannTao/Paimon/issues/18)，下一阶段为 [#19：自动传送](https://github.com/IannTao/Paimon/issues/19)。
+开发工单统一在 [GitHub Issues](https://github.com/IannTao/Paimon/issues) 跟踪，见[开发总览](https://github.com/IannTao/Paimon/issues/1)与[编号映射](docs/issues/index.md)。已实现 [#16：路径点导入](https://github.com/IannTao/Paimon/issues/16)、[#17：璃月港地表局部定位](https://github.com/IannTao/Paimon/issues/17)、[#18：按点地面导航](https://github.com/IannTao/Paimon/issues/18)及 [#19：基础自动传送](https://github.com/IannTao/Paimon/issues/19)，下一阶段为 [#9：到点拾取](https://github.com/IannTao/Paimon/issues/9)。
 
 当前目标已于 2026-10-29 调整为**全自动跑图采集**：程序自动到达资源点、调整视角并拾取，任务执行期间玩家不手工介入。方案见 [全自动跑图采集设计](docs/auto-pickup-design.md) 和 [规格](docs/specs/android-auto-pickup.md)。真实触控与注入点击共存不再是首版门槛，取代关系见 [ADR 0003](docs/adr/0003-autonomous-gathering.md)。
 
-2026-10-30 起，后续开发优先[兼容 BetterGI 路径点](docs/bettergi-pathing-compatibility.md)，顺序为：导入与预检 → 游戏坐标定位 → 按点跑图与自动传送 → 到点拾取 → 完整路线采集。0.5.0-navigation 已贯通原文件导入、局部定位、walk 地面导航及 path/target/orientation 点位推进。范围限于固定布局的璃月港地表；传送、拾取及其他动作仍未实现。含必需传送的上游样本只能显式验证导航分段，整条路线仍禁止启动。07 的移动验证继续保留。
+2026-10-30 起，后续开发优先[兼容 BetterGI 路径点](docs/bettergi-pathing-compatibility.md)，顺序为：导入与预检 → 游戏坐标定位 → 按点跑图与自动传送 → 到点拾取 → 完整路线采集。0.6.0-teleport 已贯通原文件导入、局部定位、地面导航和唯一已验证璃月港锚点的空动作传送，传送后重新定位再推进原路径点。范围限于固定布局的璃月港地表，其他锚点、force_tp、拾取和其他动作仍不支持。首点传送已真机通过；原7点整条试跑在第5点无进展停止，尚未通过整条路线或完整采集。07 的移动验证继续保留。
 
 ## 使用路线导入
 
@@ -22,9 +22,15 @@
 
 ## 使用地面导航
 
-准备 shell Shizuku 与悬浮窗授权，导入路线，在已确认起点附近点击“启动整条地面路线”。仅支持已验证区域内的 walk 与 path/target/orientation，无需运行中手工对准。path 在5单位内连续两帧确认经过，target 在2.5单位内连续两帧稳定确认，orientation 只转镜头，朝向误差不超过12°才推进。未知位置、偏离或无进展时自动停止，不盲走或要求玩家接管。
+准备 shell Shizuku 与悬浮窗授权，导入路线，在已确认可游玩状态点击“启动整条受支持路线”。地面部分仅支持已验证区域内的 walk 与 path/target/orientation，无需运行中手工对准。path 在5单位内连续两帧确认经过，target 在2.5单位内连续两帧稳定确认，orientation 只转镜头，朝向误差不超过12°才推进。未知位置、偏离或无进展时自动停止，不盲走或要求玩家接管。
 
-原文件包含必需 teleport 或其他未支持动作时禁止整条启动。开发验证可填写原数组首末序号，点击“仅验证导航分段（非原路线通过）”；结果保留原文件 SHA 与序号，分段通过不代表原路线通过。悬浮按钮、通知或返回应用都能停止并释放输入，每轮最多120秒。可在路线页查看上次导航结果；默认只保存本地报告，可选择额外保存最多160帧小地图诊断图。详细范围、逐点证据及复现见 [#18 验证记录](docs/validation/issue-18.md)。
+原文件存在未支持的必需目标、模式或动作时禁止整条启动。开发验证可填写原数组首末序号，点击“仅验证导航分段（非原路线通过）”；结果保留原文件 SHA 与序号，分段通过不代表原路线通过。悬浮按钮、通知或返回应用都能停止并释放输入，地面任务最多120秒。默认只保存本地报告，可选择保存最多160帧小地图及64帧界面概览；概览遮盖UID。详细地面范围与逐点证据见 [#18 验证记录](docs/validation/issue-18.md)。
+
+## 使用基础自动传送
+
+当前仅支持璃月港锚点id128附近的空动作传送（原样本坐标267.96,-665.16）；起始需为已验证区域内正常游戏HUD，当前地图视口能在有限放大内确认目标。程序自动开图、通过地图图像寻找可用锚点、处理重叠选项并传送，观察加载后用两帧新画面确认目标附近位置，再执行后续点。未知目标、未解锁/不可用目标、地图层级或未支持动作不会猜点。
+
+可单独点击“仅验证首个传送点（非整条通过）”；它保留原文件首点、动作和SHA，只记录首点传送验证。每次传送最多45秒，整条执行核心最多180秒。成功传送和整条路线完成分别记录，拾取尚未实现。误差、失败记录、复现和限制见 [#19 验证记录](docs/validation/issue-19.md)。
 
 ## 使用 07 自动移动验证
 

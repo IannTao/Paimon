@@ -1,10 +1,61 @@
 use paimon_probe::route_execution::{ExecutionScope, RouteTask};
 use paimon_probe::{
     movement::Conditions,
+    navigation::NavigationState,
     route_execution::{RouteCommand, RouteFrame},
 };
 
 const ORIGINAL: &[u8] = include_bytes!("fixtures/bettergi/route-1.json");
+
+#[test]
+fn consecutive_teleport_points_each_require_their_own_map_loading_and_arrival_evidence() {
+    let source=br#"{"info":{},"positions":[{"id":9,"x":267.96,"y":-665.16,"type":"teleport"},{"id":1,"x":267.96,"y":-665.16,"type":"teleport"}]}"#;
+    let mut task = RouteTask::prepare(
+        "two-teleports.json",
+        source,
+        ExecutionScope::WholeRoute,
+        1000,
+    )
+    .unwrap();
+    observe(&mut task, 1000, "world");
+    let c = observe(&mut task, 1200, "world");
+    release_tap(&mut task, c, 1400);
+    observe(&mut task, 1600, "map-zoom-3");
+    let c = observe(&mut task, 1800, "map-zoom-3");
+    release_tap(&mut task, c, 2000);
+    let c = observe(&mut task, 2200, "map-selected");
+    release_tap(&mut task, c, 2400);
+    let c = observe(&mut task, 2600, "map-detail");
+    release_tap(&mut task, c, 2800);
+    observe(&mut task, 3000, "loading");
+    observe(&mut task, 3200, "arrived");
+    observe(&mut task, 3400, "arrived");
+    assert_eq!(task.report().completed_points.len(), 1);
+    assert!(!task.report().original_route_passed);
+    observe(&mut task, 3600, "arrived");
+    let c = observe(&mut task, 3800, "arrived");
+    release_tap(&mut task, c, 4000);
+    observe(&mut task, 4200, "map-zoom-3");
+    let c = observe(&mut task, 4400, "map-zoom-3");
+    release_tap(&mut task, c, 4600);
+    let c = observe(&mut task, 4800, "map-selected");
+    release_tap(&mut task, c, 5000);
+    let c = observe(&mut task, 5200, "map-detail");
+    release_tap(&mut task, c, 5400);
+    observe(&mut task, 5600, "loading");
+    observe(&mut task, 5800, "arrived");
+    observe(&mut task, 6000, "arrived");
+    assert!(task.report().original_route_passed);
+    assert_eq!(
+        task.report()
+            .completed_points
+            .iter()
+            .map(|p| p.original_id.as_i64().unwrap())
+            .collect::<Vec<_>>(),
+        vec![9, 1]
+    );
+    assert_eq!(task.report().command_count, 8);
+}
 
 #[test]
 fn the_complete_real_phone_teleport_run_replays_original_bytes_pixels_and_input_receipts() {
@@ -71,7 +122,7 @@ fn the_complete_real_phone_teleport_run_replays_original_bytes_pixels_and_input_
         }
     }
     assert!(images.next().is_none());
-    assert_eq!(task.report().state, "completed");
+    assert_eq!(task.report().state, NavigationState::Completed);
     assert!(task.report().teleport_validation_passed && !task.report().original_route_passed);
     assert_eq!(task.report().command_count, 4);
     let initial = task.report().initial_position.unwrap();
@@ -235,13 +286,18 @@ fn a_missing_loading_transition_or_a_real_wrong_arrival_cannot_pass_the_teleport
         task.step(46_001, Conditions::Ready, None),
         RouteCommand::End
     );
-    assert_eq!(task.report().state, "failed");
+    assert_eq!(task.report().state, NavigationState::Failed);
     let mut task = awaiting_loading();
     observe(&mut task, 3000, "loading");
     for at in [3200, 3400, 3600] {
         observe(&mut task, at, "world");
     }
-    assert_eq!(task.report().state, "failed", "{}", task.report().reason);
+    assert_eq!(
+        task.report().state,
+        NavigationState::Failed,
+        "{}",
+        task.report().reason
+    );
     assert!(task.report().reason.contains("位置与原传送目标不符"));
     assert!(task.report().completed_points.is_empty() && !task.report().teleport_validation_passed);
 }
@@ -291,7 +347,7 @@ fn every_interruption_and_late_receipt_ends_a_pending_map_input_without_restarti
             panic!()
         };
         task.input_finished(serial, time, success, released);
-        assert_eq!(task.report().state, "failed");
+        assert_eq!(task.report().state, NavigationState::Failed);
         assert_eq!(observe(&mut task, 2400, "map-zoom-3"), RouteCommand::End);
     }
 }

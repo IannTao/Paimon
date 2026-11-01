@@ -26,6 +26,7 @@
 | 场景 | 证据 | 结果 |
 | --- | --- | --- |
 | 原文件首点传送 | [teleport.json](reports/issue-19/teleport.json) | 通过，runId 554252247812687，12.323秒、15帧、4次点击、0次移动，释放确认 |
+| 审查修复后的首点复测 | [teleport-final.json](reports/issue-19/teleport-final.json) | 通过，误差1.202，4次点击，加载/重新定位/释放确认 |
 | 按住时主动停止 | [stopped.json](reports/issue-19/stopped.json) | 通过；实际按住时取消，heldWhenCancelled=true，释放确认，迟到回调不续跑 |
 | 点击期间切出游戏 | [foreground-lost.json](reports/issue-19/foreground-lost.json) | 通过；前台丢失失败终态、释放确认，不在其他应用继续点击 |
 | 以已打开地图作为错误起始画面 | [wrong-start.json](reports/issue-19/wrong-start.json) | 按预期失败，0次输入、定位超时、释放确认 |
@@ -55,4 +56,6 @@ adb -s D123133103AF shell am instrument -w -e scenario wrong-start dev.paimon.pr
 cargo test -p paimon-probe --test route_execution --locked --offline
 ```
 
-Rust主机/Android类型检查、单文件回归及Android构建/lint已通过；双轴审查与结束时全套检查另行补充。未逐项真机验证锁屏、旋转、权限撤销或未解锁账号目标；对应状态路径有入口回归，不能替代物理验收。自动拾取、任意锚点/地图、障碍恢复和完整采集仍未实现。
+最终检查通过：Rust格式、主机/Android Clippy、单文件回归；结束时一次Rust全套76通过、4项既有平台条件测试忽略；Android主APK/测试APK构建及lint；审查修复后首点真机复测；原7/20点文件、JSONC/离线导入及两参考点定位回放/地下拒绝的Android入口回归。[双轴审查](issue-19-review.md)的问题已修复，分别复核无剩余阻塞项。
+
+本地APK `android/app/build/outputs/apk/debug/app-debug.apk`，SHA-256 `d9adca404871bdc9604316fe56ed4023450c4fc4544836bd5696ee548509f82b`，已安装到基准设备；二进制不提交源码仓库。未逐项真机验证锁屏、旋转、权限撤销或未解锁账号目标；对应状态路径有入口回归，不能替代物理验收。自动拾取、任意锚点/地图、障碍恢复和完整采集仍未实现。

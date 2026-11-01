@@ -53,7 +53,7 @@ class RouteImportActivity : Activity() {
         button(content, "仅验证首个传送点（非整条通过）") { startNavigation(0, 0, firstTeleportOnly = true) }
         segmentFirst = EditText(this).apply { hint = "分段首点序号（原数组，1起算）"; inputType = InputType.TYPE_CLASS_NUMBER; setText("2"); content.addView(this) }
         segmentLast = EditText(this).apply { hint = "分段末点序号"; inputType = InputType.TYPE_CLASS_NUMBER; setText("4"); content.addView(this) }
-        diagnostics = CheckBox(this).apply { text = "保存本次小地图诊断画面（最多160帧）"; content.addView(this) }
+        diagnostics = CheckBox(this).apply { text = "保存本次诊断画面（最多160帧小地图＋64帧界面概览）"; content.addView(this) }
         button(content, "仅验证导航分段（非原路线通过）") {
             val first = segmentFirst.text.toString().toIntOrNull()
             val last = segmentLast.text.toString().toIntOrNull()

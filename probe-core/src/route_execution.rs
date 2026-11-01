@@ -17,14 +17,26 @@ pub enum ExecutionScope {
     FirstTeleport,
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ExecutionPhase {
+    Preparing,
+    OpeningMap,
+    SelectingAnchor,
+    AnchorDetails,
+    Loading,
+    Navigation,
+    Finished,
+}
+
 #[derive(Debug, Serialize)]
 pub struct ExecutionReport {
     pub source_sha256: String,
     pub scope: ExecutionScope,
     pub current_index: usize,
     pub last: usize,
-    pub state: String,
-    pub phase: String,
+    pub state: NavigationState,
+    pub phase: ExecutionPhase,
     pub reason: String,
     pub original_route_passed: bool,
     pub teleport_validation_passed: bool,
@@ -149,8 +161,8 @@ impl RouteTask {
                 scope,
                 current_index: 1,
                 last: route.points.len(),
-                state: "observing".into(),
-                phase: "preparing".into(),
+                state: NavigationState::Observing,
+                phase: ExecutionPhase::Preparing,
                 reason: "等待真实起始画面".into(),
                 original_route_passed: false,
                 teleport_validation_passed: false,
@@ -171,14 +183,14 @@ impl RouteTask {
     pub fn report(&self) -> &ExecutionReport {
         &self.report
     }
-    fn terminal(&self) -> bool {
+    pub(crate) fn terminal(&self) -> bool {
         matches!(
-            self.report.state.as_str(),
-            "completed" | "failed" | "stopped"
+            self.report.state,
+            NavigationState::Completed | NavigationState::Failed | NavigationState::Stopped
         )
     }
     fn fail(&mut self, reason: &str) -> RouteCommand {
-        self.report.state = "failed".into();
+        self.report.state = NavigationState::Failed;
         self.report.reason = reason.into();
         self.report.position = None;
         self.report.captured_at = None;
@@ -186,7 +198,7 @@ impl RouteTask {
         self.pending = None;
         RouteCommand::End
     }
-    fn tap(&mut self, now: u64, x: u32, y: u32, phase: &str) -> RouteCommand {
+    fn tap(&mut self, now: u64, x: u32, y: u32, phase: ExecutionPhase) -> RouteCommand {
         if self
             .report
             .captured_at
@@ -205,9 +217,9 @@ impl RouteTask {
             released_at: None,
             ground_serial: None,
         });
-        self.report.state = "running".into();
-        self.report.phase = phase.into();
-        if phase == "opening_map" {
+        self.report.state = NavigationState::Running;
+        self.report.phase = phase;
+        if phase == ExecutionPhase::OpeningMap {
             self.report.position = None;
         }
         self.samples = 0;
@@ -232,19 +244,21 @@ impl RouteTask {
                 _ => "画面失效",
             });
             if condition == Conditions::UserStopped {
-                self.report.state = "stopped".into();
+                self.report.state = NavigationState::Stopped;
             }
             return c;
         }
         if now < self.last_now
             || now.saturating_sub(self.started_at) > 180_000
-            || (self.report.phase != "navigation"
+            || (self.report.phase != ExecutionPhase::Navigation
                 && now.saturating_sub(self.teleport_started_at) > 45_000)
         {
             return self.fail("传送时钟无效或超过45秒期限");
         }
         self.last_now = now;
-        if self.report.phase == "preparing" && now.saturating_sub(self.teleport_started_at) > 5000 {
+        if self.report.phase == ExecutionPhase::Preparing
+            && now.saturating_sub(self.teleport_started_at) > 5000
+        {
             return self.fail("起始可游玩画面定位超时");
         }
         if self
@@ -272,10 +286,10 @@ impl RouteTask {
         self.report.pending_serial = None;
         self.last_capture = frame.captured_at;
         self.report.captured_at = Some(frame.captured_at);
-        match self.report.phase.as_str() {
-            "preparing" => {
+        match self.report.phase {
+            ExecutionPhase::Preparing => {
                 if self.points[self.report.current_index - 1].point_type != "teleport" {
-                    self.report.phase = "navigation".into();
+                    self.report.phase = ExecutionPhase::Navigation;
                     return self.ground_step(now, frame);
                 }
                 let observed = self.localization.observe(
@@ -293,12 +307,14 @@ impl RouteTask {
                 }
                 self.samples += 1;
                 if self.samples >= 2 {
-                    self.report.initial_position = observed.position;
+                    if self.report.initial_position.is_none() {
+                        self.report.initial_position = observed.position;
+                    }
                     self.report.reason = "已确认可游玩起始位置，打开游戏地图".into();
-                    return self.tap(now, 312, 160, "opening_map");
+                    return self.tap(now, 312, 160, ExecutionPhase::OpeningMap);
                 }
             }
-            "opening_map" => {
+            ExecutionPhase::OpeningMap => {
                 let Some(screen) = frame.screen else {
                     return self.fail("缺少地图界面画面");
                 };
@@ -325,7 +341,7 @@ impl RouteTask {
                             inliers,
                             reprojection_error: error,
                         });
-                        return self.tap(now, x, y, "selecting_anchor");
+                        return self.tap(now, x, y, ExecutionPhase::SelectingAnchor);
                     }
                     self.map_target = Some((x, y));
                     self.report.reason = "等待第二帧地图目标稳定".into();
@@ -337,12 +353,12 @@ impl RouteTask {
                     if let Some((x, y)) = map_screen::zoom_button(screen) {
                         self.zooms += 1;
                         self.report.reason = "目标未确认，在已识别地图中有限放大".into();
-                        return self.tap(now, x, y, "opening_map");
+                        return self.tap(now, x, y, ExecutionPhase::OpeningMap);
                     }
                     return self.fail("地图缩放控件未确认");
                 }
             }
-            "selecting_anchor" | "anchor_details" => {
+            ExecutionPhase::SelectingAnchor | ExecutionPhase::AnchorDetails => {
                 let Some(screen) = frame.screen else {
                     return self.fail("缺少锚点选择画面");
                 };
@@ -352,12 +368,12 @@ impl RouteTask {
                         LocalizationTask::new(&import_route("selected-route.json", &self.bytes));
                     self.report.position = None;
                     self.missing = 0;
-                    return self.tap(now, x, y, "loading");
+                    return self.tap(now, x, y, ExecutionPhase::Loading);
                 }
-                if self.report.phase == "selecting_anchor" {
+                if self.report.phase == ExecutionPhase::SelectingAnchor {
                     if let Some((x, y)) = map_screen::anchor_choice(screen) {
                         self.report.reason = "在重叠目标中选择已识别的传送锚点项".into();
-                        return self.tap(now, x, y, "anchor_details");
+                        return self.tap(now, x, y, ExecutionPhase::AnchorDetails);
                     }
                 }
                 self.missing += 1;
@@ -366,7 +382,7 @@ impl RouteTask {
                     return self.fail("未识别可用传送按钮或锚点，停止传送");
                 }
             }
-            "loading" => {
+            ExecutionPhase::Loading => {
                 let Some(screen) = frame.screen else {
                     return self.fail("缺少传送返回画面");
                 };
@@ -422,8 +438,8 @@ impl RouteTask {
                     if self.report.scope == ExecutionScope::FirstTeleport
                         || self.report.current_index > self.report.last
                     {
-                        self.report.state = "completed".into();
-                        self.report.phase = "finished".into();
+                        self.report.state = NavigationState::Completed;
+                        self.report.phase = ExecutionPhase::Finished;
                         self.report.original_route_passed =
                             self.report.scope == ExecutionScope::WholeRoute;
                         self.report.reason =
@@ -435,12 +451,12 @@ impl RouteTask {
                             .into();
                         return RouteCommand::End;
                     }
-                    self.report.phase = "navigation".into();
+                    self.prepare_next_point(now);
                     self.report.reason = "传送已重新定位确认，下一帧交给后续路径点执行".into();
                 }
             }
-            "navigation" => return self.ground_step(now, frame),
-            _ => {}
+            ExecutionPhase::Navigation => return self.ground_step(now, frame),
+            ExecutionPhase::Finished => return self.fail("路线阶段已结束，不能继续输入"),
         }
         RouteCommand::Observe
     }
@@ -503,6 +519,9 @@ impl RouteTask {
         self.report.current_index = r.current_index;
         self.report.reason = r.reason.clone();
         self.report.position = r.position;
+        if self.report.initial_position.is_none() {
+            self.report.initial_position = r.position;
+        }
         self.report.input_released = r.input_released;
         self.report.captured_at = r.captured_at;
         for point in &r.completed_points {
@@ -522,21 +541,13 @@ impl RouteTask {
         if r.state == NavigationState::Completed {
             self.ground = None;
             if self.report.current_index > self.report.last {
-                self.report.state = "completed".into();
-                self.report.phase = "finished".into();
+                self.report.state = NavigationState::Completed;
+                self.report.phase = ExecutionPhase::Finished;
                 self.report.original_route_passed = true;
                 self.report.reason = "原路线全部受支持点已按画面确认完成；未执行拾取".into();
                 return RouteCommand::End;
             }
-            self.report.phase = "preparing".into();
-            self.teleport_started_at = now;
-            self.zooms = 0;
-            self.missing = 0;
-            self.samples = 0;
-            self.map_target = None;
-            self.report.loading_observed = false;
-            self.localization =
-                LocalizationTask::new(&import_route("selected-route.json", &self.bytes));
+            self.prepare_next_point(now);
             return RouteCommand::Observe;
         }
         let (local, action) = match command {
@@ -558,7 +569,7 @@ impl RouteTask {
         self.report.command_count += 1;
         let serial = self.report.command_count;
         self.report.pending_serial = Some(serial);
-        self.report.state = "running".into();
+        self.report.state = NavigationState::Running;
         self.pending = Some(Pending {
             serial,
             created_at: now,
@@ -576,5 +587,23 @@ impl RouteTask {
             }
             _ => unreachable!(),
         }
+    }
+    fn prepare_next_point(&mut self, now: u64) {
+        self.ground = None;
+        if self.points[self.report.current_index - 1].point_type != "teleport" {
+            self.report.phase = ExecutionPhase::Navigation;
+            return;
+        }
+        self.report.phase = ExecutionPhase::Preparing;
+        self.teleport_started_at = now;
+        self.zooms = 0;
+        self.missing = 0;
+        self.samples = 0;
+        self.map_target = None;
+        self.report.map_target = None;
+        self.report.loading_observed = false;
+        self.report.position = None;
+        self.localization =
+            LocalizationTask::new(&import_route("selected-route.json", &self.bytes));
     }
 }

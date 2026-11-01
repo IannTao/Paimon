@@ -1,6 +1,6 @@
 # BetterGI 路径点兼容方案
 
-2026-10-30 核查。用户指定的来源为 [bettergi-scripts-list/repo/pathing](https://github.com/babalae/bettergi-scripts-list/tree/main/repo/pathing)。这是开发计划和兼容合同。2026-10-31 已实现 [#16 原文件导入、预览与预检](validation/issue-16.md)、[#17 固定手机布局下的璃月港地表局部定位](validation/issue-17.md)及 [#18 同范围地面导航](validation/issue-18.md)。支持矩阵仅开放该范围的 walk、path、target、orientation；启动时仍须取得可信实时画面并满足起点条件。teleport、其他移动模式和动作未支持；原样本含必需传送，整条路线继续判为能力未齐。显式导航分段不算原路线通过。
+2026-10-30 核查。用户指定的来源为 [bettergi-scripts-list/repo/pathing](https://github.com/babalae/bettergi-scripts-list/tree/main/repo/pathing)。这是开发计划和兼容合同。至2026-11-01，已实现 [#16 原文件导入与预检](validation/issue-16.md)、[#17 固定布局璃月港地表局部定位](validation/issue-17.md)、[#18 同范围地面导航](validation/issue-18.md)及 [#19 唯一已验证锚点的基础空动作传送](validation/issue-19.md)。支持矩阵仅开放同范围walk/path/target/orientation及该锚点；force_tp、其他目标/模式/动作仍拒绝。原7点样本具备已实现的基本要求，可以开始执行，但真机整条试跑在第5点无进展停止，不能把预检或首点传送通过算作整条完成。显式导航分段和首点传送验证也不算原路线通过。
 
 ## 上游基线
 

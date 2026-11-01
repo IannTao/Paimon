@@ -139,10 +139,7 @@ pub unsafe extern "system" fn Java_dev_paimon_probe_RouteExecutionNative_receipt
         return std::ptr::null_mut();
     }
     task.input_finished(serial as u64, now as u64, success != 0, released != 0);
-    let command = if matches!(
-        task.report().state.as_str(),
-        "completed" | "failed" | "stopped"
-    ) {
+    let command = if task.terminal() {
         RouteCommand::End
     } else {
         RouteCommand::Observe
