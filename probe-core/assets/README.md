@@ -9,3 +9,18 @@
 - `mobile-player-arrow.rgb`：基准 Android 2480×1116 HUD 的 40×40 RGB 原始色彩模板，从 `tests/fixtures/localization/harbor-128.png` 的 `(112,112)` 裁取；标定方向约95°（北0，顺时针），模板只用于手机角色箭头识别，摄像机视野扇形不代表角色朝向。SHA-256 `63642a7ca9808450ef62df33e0300c2944277b32fc3052837d27dd9799f5014c`。另一参考位置与实时画面用于复核，不把匹配分数本身当作角度真值。
 
 原始地图及游戏画面权利归其原权利人；以上记录用于固定来源、坐标基线与派生资源身份。原始整图仅用于开发准备，没有打包到 APK。
+
+## #19 手机地图GUI模型
+
+以下模型来自本轮真实游戏画面的半尺寸1240×558概览，见[画面来源](../tests/fixtures/teleport/README.md)。它们用于确认已显示的控件和可用锚点；目标像素先由地图特征拟合和原游戏坐标投影得到，再匹配附近的青白色已解锁锚点标识，不把游戏坐标当作点击像素。
+
+| 文件 | 来源PNG | 裁片(x,y,w,h) | SHA-256 |
+| --- | --- | --- | --- |
+| map-close.rgb | map-zoom-3 | 1125,13,36,36 | ddf41bd184c0abefc0b6e41111be01c69c4792b7e40426a24791691449b922bf |
+| map-zoom-in.rgb | map-zoom-3 | 70,207,16,20 | 140a35605a4c1ce5fd5b73bbf7ef661876c71714080fac2e66e5ad99fde53690 |
+| map-waypoint.rgb | map-zoom-3 | 479,82,24,34 | 7f12dc67b18c17860aec790dbeb1fcbf4dd67f286275f1c20e22cabc876b77d8 |
+| map-anchor-choice.rgb | map-selected | 827,321,77,26 | d5a6afc14ea055ad1c388c38187c26a803de4ed64d60f1555d06f98e480fd954 |
+| map-anchor-header.rgb | map-detail | 914,10,79,25 | 1ef1ca5913b99bf213c27aaae06f50885525a2931af0ec203e9643d0894e4014 |
+| map-teleport-button.rgb | map-detail | 1014,495,60,28 | 3c34291233cc4d256491e155306653e5334d475c6f68055eb59ab8ee78c5bad5 |
+
+缩放符号及重叠选项文字使用不透明亮色笔画，不依赖半透明背景地形；选项同时要求暗底。详情标题及传送按钮检查完整图块。模型只开放当前固定中文布局、地表及已验证璃月港锚点；未知布局、层级或不可用目标不能据此猜点。

@@ -34,7 +34,7 @@ pub enum NavigationState {
     Failed,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Clone, Debug, Serialize)]
 pub struct PointEvidence {
     pub index: usize,
     pub original_id: Value,

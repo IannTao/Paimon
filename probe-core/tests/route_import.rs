@@ -1,12 +1,12 @@
 use paimon_probe::route_import::{import_route, ImportStatus};
 
 #[test]
-fn original_route_previews_in_array_order_but_cannot_execute() {
+fn original_route_previews_in_array_order_and_has_scoped_verified_teleport_capability() {
     let report = import_route(
         "琉璃百合.json",
         include_bytes!("fixtures/bettergi/route-1.json"),
     );
-    assert_eq!(report.status, ImportStatus::Unsupported);
+    assert_eq!(report.status, ImportStatus::Executable);
     assert_eq!(report.points.len(), 7);
     assert_eq!(report.points[0].x, 267.96);
     assert_eq!(report.points[0].y, -665.16);
@@ -16,7 +16,7 @@ fn original_route_previews_in_array_order_but_cannot_execute() {
     assert!(report
         .capabilities
         .iter()
-        .any(|c| c.field == "type:teleport" && !c.executable));
+        .any(|c| c.field == "type:teleport" && c.executable));
     assert!(report
         .capabilities
         .iter()
@@ -26,6 +26,16 @@ fn original_route_previews_in_array_order_but_cannot_execute() {
         .iter()
         .any(|c| c.field == "world_localization" && c.executable));
     assert_eq!(report.original["info"]["authors"][0]["name"], "黎歌");
+}
+
+#[test]
+fn a_later_unknown_teleport_cannot_be_hidden_by_deduplicating_a_supported_capability() {
+    let report=import_route("two-teleports.json",br#"{"info":{},"positions":[{"x":267.96,"y":-665.16,"type":"teleport"},{"x":366.7,"y":-502.4,"type":"teleport"}]}"#);
+    assert_eq!(report.status, ImportStatus::Unsupported);
+    assert!(report
+        .capabilities
+        .iter()
+        .any(|c| c.field == "type:teleport" && !c.executable));
 }
 
 #[test]

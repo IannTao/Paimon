@@ -208,7 +208,7 @@ impl LocalizationTask {
                     ((q.x as f64, q.y as f64), (t.x as f64, t.y as f64))
                 })
                 .collect();
-            match_geometry(&pairs)
+            match_geometry(&pairs, (132.0, 132.0), 0.25..3.0)
         };
         let matched = match_atlas(atlas).or_else(|| {
             // A recent screen fix narrows descriptor candidates, never substitutes for a new match.
@@ -250,7 +250,7 @@ impl LocalizationTask {
     }
 }
 
-fn atlas() -> &'static [Feature] {
+pub(crate) fn atlas() -> &'static [Feature] {
     static FEATURES: OnceLock<Vec<Feature>> = OnceLock::new();
     FEATURES.get_or_init(|| {
         let bytes = include_bytes!("../assets/liyue-harbor.gray");
@@ -265,23 +265,38 @@ fn atlas() -> &'static [Feature] {
 }
 
 #[derive(Clone, Copy)]
-struct Similarity {
+pub(crate) struct Similarity {
     a: f64,
     b: f64,
     tx: f64,
     ty: f64,
 }
 impl Similarity {
-    fn apply(self, x: f64, y: f64) -> (f64, f64) {
+    pub(crate) fn apply(self, x: f64, y: f64) -> (f64, f64) {
         (
             self.a * x - self.b * y + self.tx,
             self.b * x + self.a * y + self.ty,
         )
     }
+    pub(crate) fn inverse(self, x: f64, y: f64) -> (f64, f64) {
+        let d = self.a * self.a + self.b * self.b;
+        let (x, y) = (x - self.tx, y - self.ty);
+        (
+            (self.a * x + self.b * y) / d,
+            (-self.b * x + self.a * y) / d,
+        )
+    }
+    pub(crate) fn rotation(self) -> f64 {
+        self.b.atan2(self.a).to_degrees()
+    }
 }
 type Pair = ((f64, f64), (f64, f64));
 
-fn match_geometry(pairs: &[Pair]) -> Option<(Similarity, usize, f64)> {
+pub(crate) fn match_geometry(
+    pairs: &[Pair],
+    center: (f64, f64),
+    scales: std::ops::Range<f64>,
+) -> Option<(Similarity, usize, f64)> {
     let mut candidates = Vec::new();
     for i in 0..pairs.len() {
         for j in i + 1..pairs.len() {
@@ -294,7 +309,7 @@ fn match_geometry(pairs: &[Pair]) -> Option<(Similarity, usize, f64)> {
             }
             let a = ((tx2 - tx) * dx + (ty2 - ty) * dy) / d;
             let b = ((ty2 - ty) * dx - (tx2 - tx) * dy) / d;
-            if !(0.25..3.0).contains(&a.hypot(b)) {
+            if !scales.contains(&a.hypot(b)) {
                 continue;
             }
             let fit = Similarity {
@@ -303,7 +318,7 @@ fn match_geometry(pairs: &[Pair]) -> Option<(Similarity, usize, f64)> {
                 tx: tx - a * qx + b * qy,
                 ty: ty - b * qx - a * qy,
             };
-            let (cx, cy) = fit.apply(132.0, 132.0);
+            let (cx, cy) = fit.apply(center.0, center.1);
             if !(60.0..964.0).contains(&cx) || !(60.0..964.0).contains(&cy) {
                 continue;
             }
@@ -328,9 +343,9 @@ fn match_geometry(pairs: &[Pair]) -> Option<(Similarity, usize, f64)> {
     }
     candidates.sort_by(|a, b| b.1.cmp(&a.1).then(a.2.total_cmp(&b.2)));
     let best = *candidates.first()?;
-    let p = best.0.apply(132.0, 132.0);
+    let p = best.0.apply(center.0, center.1);
     if candidates.iter().any(|(fit, count, _)| {
-        let q = fit.apply(132.0, 132.0);
+        let q = fit.apply(center.0, center.1);
         *count as f64 >= best.1 as f64 * 0.8 && (p.0 - q.0).hypot(p.1 - q.1) > 15.0
     }) {
         return None;
@@ -368,8 +383,8 @@ fn match_geometry(pairs: &[Pair]) -> Option<(Similarity, usize, f64)> {
         tx: tx - a * qx + b * qy,
         ty: ty - b * qx - a * qy,
     };
-    let (cx, cy) = fit.apply(132.0, 132.0);
-    if !(0.25..3.0).contains(&fit.a.hypot(fit.b))
+    let (cx, cy) = fit.apply(center.0, center.1);
+    if !scales.contains(&fit.a.hypot(fit.b))
         || !(60.0..964.0).contains(&cx)
         || !(60.0..964.0).contains(&cy)
     {

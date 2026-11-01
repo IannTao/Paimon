@@ -36,7 +36,7 @@ class RouteDeviceChecks : Instrumentation() {
                 try { click(activity, "选择路线原文件"); check(picker.hits > 0) { "Picker monitor did not intercept request" }; awaitText(activity, *expected) }
                 finally { removeMonitor(picker) }
             }
-            import("ground", "路径点：7", "267.96", "黎歌", "格式合法，执行能力未齐", "1646045d03cfb277", "路线🌸-ground.json")
+            import("ground", "路径点：7", "267.96", "黎歌", "格式合法，能力预检通过", "1646045d03cfb277", "路线🌸-ground.json")
             import("flight", "路径点：20", "stop_flying", "a2e2bb2ebc659f60")
             import("large", "能力：共 2004 项", "诊断：共 2004 项", "显示已截断")
             click(activity, "能力下一页")

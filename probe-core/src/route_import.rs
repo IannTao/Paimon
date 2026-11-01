@@ -238,6 +238,7 @@ pub fn import_route(file_name: &str, bytes: &[u8]) -> ImportReport {
     }
     for i in 0..report.points.len() {
         let p = &report.points[i];
+        let verified_teleport = crate::route_execution::supported_teleport(p);
         let requirements = [
             (
                 "type",
@@ -259,7 +260,8 @@ pub fn import_route(file_name: &str, bytes: &[u8]) -> ImportReport {
             let field = format!("positions[{i}].{key}");
             let executable = local_map
                 && ((key == "type" && ["path", "target", "orientation"].contains(&value.as_str()))
-                    || (key == "move_mode" && value == "walk"));
+                    || (key == "move_mode" && value == "walk")
+                    || (key == "type" && verified_teleport));
             report.capabilities.push(Capability {
                 field: format!("{key}:{value}"),
                 recognized,
@@ -283,7 +285,14 @@ pub fn import_route(file_name: &str, bytes: &[u8]) -> ImportReport {
         }
     }
     report.capabilities.sort_by(|a, b| a.field.cmp(&b.field));
-    report.capabilities.dedup_by(|a, b| a.field == b.field);
+    report.capabilities.dedup_by(|a, b| {
+        if a.field != b.field {
+            return false;
+        }
+        b.executable &= a.executable;
+        b.recognized &= a.recognized;
+        true
+    });
     if [
         "1646045d03cfb277e3651f341d0d876f9042b080e623149c217bb50517015dd2",
         "a2e2bb2ebc659f6013126320d52b53a1c68b4126b24c9e74e59270d36931e6fd",

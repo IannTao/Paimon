@@ -33,13 +33,9 @@ class NavigationDeviceChecks : Instrumentation() {
             val picker = addMonitor(filter, ActivityResult(Activity.RESULT_OK, Intent().setData(Uri.parse("content://dev.paimon.probe.test.routes/${if (scenario == "orientation") "navigation" else "ground"}"))), true)
             try { click(route, "选择路线原文件"); check(picker.hits > 0) } finally { removeMonitor(picker) }
             awaitText(route, if (scenario == "orientation") "路径点：4" else "路径点：7")
-            if (scenario != "orientation") {
-                click(route, "启动整条地面路线")
-                awaitText(route, "teleport 尚未支持")
-            }
             runOnMainSync { views(route.window.decorView).filterIsInstance<CheckBox>().single().isChecked = true }
             val startedAt = SystemClock.elapsedRealtimeNanos()
-            click(route, if (scenario == "orientation") "启动整条地面路线" else "仅验证导航分段（非原路线通过）")
+            click(route, if (scenario == "orientation") "启动整条受支持路线" else "仅验证导航分段（非原路线通过）")
             val deadline = SystemClock.uptimeMillis() + 135_000
             var triggered = false
             var proof: org.json.JSONObject? = null

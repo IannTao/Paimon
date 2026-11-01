@@ -40,7 +40,7 @@ class RouteImportActivity : Activity() {
         super.onCreate(savedInstanceState)
         content = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(24, 24, 24, 24) }
         setContentView(ScrollView(this).apply { addView(content) })
-        label(content, "BetterGI 路线导入与预检\n地面导航仅支持璃月港地表、固定屏幕布局和 walk。传送、拾取和其他动作尚未实现。启动前需处于已确认起点附近，运行中自动操作。")
+        label(content, "BetterGI 路线导入与预检\n当前验证范围为璃月港地表、固定布局、walk及基础空动作传送。未知锚点、force_tp、拾取和其他动作不支持；运行中自动操作。")
         button(content, "选择路线原文件") {
             @Suppress("DEPRECATION")
             startActivityForResult(Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
@@ -49,7 +49,8 @@ class RouteImportActivity : Activity() {
             }, PICK_ROUTE)
         }
         button(content, "读取已保存路线（离线）") { restore() }
-        button(content, "启动整条地面路线") { startNavigation(0, 0) }
+        button(content, "启动整条受支持路线") { startNavigation(0, 0) }
+        button(content, "仅验证首个传送点（非整条通过）") { startNavigation(0, 0, firstTeleportOnly = true) }
         segmentFirst = EditText(this).apply { hint = "分段首点序号（原数组，1起算）"; inputType = InputType.TYPE_CLASS_NUMBER; setText("2"); content.addView(this) }
         segmentLast = EditText(this).apply { hint = "分段末点序号"; inputType = InputType.TYPE_CLASS_NUMBER; setText("4"); content.addView(this) }
         diagnostics = CheckBox(this).apply { text = "保存本次小地图诊断画面（最多160帧）"; content.addView(this) }
@@ -171,13 +172,14 @@ class RouteImportActivity : Activity() {
         }.onFailure { localization.text = "定位准备未启动：${it.message}" }
     }
 
-    private fun startNavigation(first: Int, last: Int) {
+    private fun startNavigation(first: Int, last: Int, firstTeleportOnly: Boolean = false) {
         val source = selected ?: run { localization.text = "请先导入路线"; return }
         val report = current ?: return
         val request = generation.incrementAndGet()
         localization.text = "正在检查导航范围…"
         worker.execute {
-            val result = runCatching { NavigationNative.preview(source.bytes, first, last) }
+            val routeExecution = first == 0 && last == 0
+            val result = runCatching { if (routeExecution) RouteExecutionNative.preview(source.bytes, firstTeleportOnly) else NavigationNative.preview(source.bytes, first, last) }
             runOnUiThread {
                 if (isDestroyed || request != generation.get()) return@runOnUiThread
                 result.onSuccess {
@@ -191,6 +193,7 @@ class RouteImportActivity : Activity() {
                         stopService(Intent(this, LocalizationService::class.java))
                         startForegroundService(Intent(this, NavigationService::class.java)
                             .putExtra("routeSha", report.getString("sha256")).putExtra("first", first).putExtra("last", last)
+                            .putExtra("routeExecution", routeExecution).putExtra("firstTeleportOnly", firstTeleportOnly)
                             .putExtra("diagnostics", diagnostics.isChecked))
                         startActivity(game)
                     }.onFailure { localization.text = "导航未启动：${it.message}" }
@@ -232,7 +235,11 @@ class RouteImportActivity : Activity() {
         val capabilities = report.getJSONArray("capabilities")
         for (i in range("能力", capabilities.length(), capabilityPage) { capabilityPage = it; render() }) {
             val c = capabilities.getJSONObject(i)
-            val scope = if (c.getString("field") == "world_localization") "（仅璃月港地表局部/2480×1116，须检查实时画面）" else ""
+            val scope = when (c.getString("field")) {
+                "world_localization" -> "（仅璃月港地表局部/2480×1116，须检查实时画面）"
+                "type:teleport" -> "（仅已验证的璃月港锚点、空动作，启动时还须确认可用）"
+                else -> ""
+            }
             label(preview, "${c.getString("field")}$scope：${if (c.getBoolean("recognized")) "是" else "否"} / ${if (c.getBoolean("executable")) "是" else "否"}")
         }
         label(preview, "诊断（包含全部路径点及路线配置，独立分页）")

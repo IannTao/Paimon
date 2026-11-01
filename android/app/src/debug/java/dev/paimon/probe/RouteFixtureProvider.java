@@ -40,6 +40,8 @@ public class RouteFixtureProvider extends ContentProvider {
                 String file = "ground".equals(name) ? "route-1.json" : "route-2.json";
                 try (InputStream input = getContext().createPackageContext("dev.paimon.probe.test", 0)
                     .getAssets().open("bettergi/" + file)) { bytes = input.readAllBytes(); }
+            } else if ("force-tp".equals(name)) {
+                bytes = "{\"info\":{},\"positions\":[{\"id\":1,\"x\":267.96,\"y\":-665.16,\"type\":\"teleport\",\"action\":\"force_tp\"}]}".getBytes(StandardCharsets.UTF_8);
             } else if ("jsonc".equals(name)) {
                 bytes = ("{/* comment */\"info\":{\"name\":\"自定义\",\"author\":\"作者\",\"version\":\"2\"},"
                     + "\"config\":{\"new_behavior\":1},\"positions\":[{\"id\":9,\"x\":1.25,\"y\":-2,},"

@@ -31,9 +31,13 @@ class NavigationInputService : INavigationInput.Stub() {
         synchronized(gate) { check(runId > 0 && this.runId == 0L && !held); this.runId = runId }
     }
     override fun capture(runId: Long): ByteArray {
+        return captureOwned(runId, false)
+    }
+    override fun captureScreen(runId: Long): ByteArray = captureOwned(runId, true)
+    private fun captureOwned(runId: Long, full: Boolean): ByteArray {
         requireShell()
         synchronized(gate) { check(this.runId == runId && runId > 0 && !held) }
-        val packet = screen.capture()
+        val packet = screen.capture(full)
         synchronized(gate) { check(this.runId == runId && !held); capturedAt = ByteBuffer.wrap(packet, 0, 8).long }
         return packet
     }
@@ -48,10 +52,11 @@ class NavigationInputService : INavigationInput.Stub() {
         if (accepted) held = false
         return accepted
     }
-    override fun execute(runId: Long, serial: Long, kind: Int, dx: Int, durationMs: Int, capturedAt: Long): LongArray {
+    override fun execute(runId: Long, serial: Long, kind: Int, dx: Int, durationMs: Int, capturedAt: Long, tapX: Int, tapY: Int): LongArray {
         requireShell()
         require((kind == 1 && dx != 0 && dx in -240..240 && durationMs == 180) ||
-            (kind == 2 && dx == 0 && durationMs in 120..400)) { "输入命令超出已验证范围" }
+            (kind == 2 && dx == 0 && durationMs in 120..400) ||
+            (kind == 3 && dx == 0 && durationMs == 80 && tapX in 40..2440 && tapY in 40..1080)) { "输入命令超出已验证范围" }
         check(foregroundPackage() == MovementService.GAME) { "原神不在前台" }
         val now = SystemClock.elapsedRealtime()
         synchronized(gate) {
@@ -76,8 +81,8 @@ class NavigationInputService : INavigationInput.Stub() {
             synchronized(gate) {
                 check(this.runId == runId)
                 downAt = SystemClock.uptimeMillis(); started = downAt
-                x = if (kind == 1) 1450f else 455f
-                y = if (kind == 1) 500f else 850f
+                x = when (kind) { 1 -> 1450f; 2 -> 455f; else -> tapX.toFloat() }
+                y = when (kind) { 1 -> 500f; 2 -> 850f; else -> tapY.toFloat() }
                 held = true
                 check(inject(MotionEvent.ACTION_DOWN, x, y))
             }
@@ -87,8 +92,8 @@ class NavigationInputService : INavigationInput.Stub() {
                 if (elapsed >= durationMs) break
                 synchronized(gate) {
                     check(this.runId == runId && held && SystemClock.elapsedRealtime() - capturedAt <= 1500)
-                    x = if (kind == 1) 1450f + dx * (elapsed.toFloat() / durationMs).coerceIn(0f, 1f) else 455f
-                    y = if (kind == 1) 500f else 730f
+                    x = when (kind) { 1 -> 1450f + dx * (elapsed.toFloat() / durationMs).coerceIn(0f, 1f); 2 -> 455f; else -> tapX.toFloat() }
+                    y = when (kind) { 1 -> 500f; 2 -> 730f; else -> tapY.toFloat() }
                     check(inject(MotionEvent.ACTION_MOVE, x, y))
                 }
                 Thread.sleep(12)

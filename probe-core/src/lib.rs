@@ -3,8 +3,10 @@
 
 mod camera_orientation;
 pub mod localization;
+mod map_screen;
 pub mod movement;
 pub mod navigation;
+pub mod route_execution;
 
 #[cfg(target_os = "android")]
 mod movement_android;
@@ -19,6 +21,8 @@ mod localization_android;
 mod android_jni;
 #[cfg(target_os = "android")]
 mod navigation_android;
+#[cfg(target_os = "android")]
+mod route_execution_android;
 
 const COUNTDOWN_MS: u64 = 5_000;
 const INTERVAL_MS: u64 = 1_000;

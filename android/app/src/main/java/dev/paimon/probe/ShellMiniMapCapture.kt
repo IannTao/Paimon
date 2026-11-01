@@ -1,6 +1,9 @@
 package dev.paimon.probe
 
 import android.os.Process
+import android.graphics.Bitmap
+import android.graphics.Color
+import java.io.ByteArrayOutputStream
 import android.os.SystemClock
 import java.io.DataInputStream
 import java.nio.ByteBuffer
@@ -15,7 +18,7 @@ class ShellMiniMapCapture {
     @Volatile private var child: java.lang.Process? = null
     @Volatile private var closed = false
 
-    fun capture(): ByteArray {
+    fun capture(full: Boolean = false): ByteArray {
         check(Process.myUid() == 2000 && !closed) { "需要 shell Shizuku" }
         check(ShellForeground.resumedPackage() == MovementService.GAME) { "原神不在前台" }
         val capturedAt = SystemClock.elapsedRealtime()
@@ -39,7 +42,21 @@ class ShellMiniMapCapture {
                 val at = (y * 2480 + x) * 4
                 packet.put(bytes[at]).put(bytes[at + 1]).put(bytes[at + 2])
             }
-            return packet.array()
+            if (!full) return packet.array()
+            // Half-size overview for map recognition; original minimap stays lossless.
+            val pixels = IntArray(1240 * 558) { n ->
+                val px = n % 1240; val py = n / 1240
+                if (py >= 544) Color.BLACK else {
+                    val at = ((py * 2 + 1) * 2480 + px * 2 + 1) * 4
+                    Color.rgb(bytes[at].toInt() and 255, bytes[at + 1].toInt() and 255, bytes[at + 2].toInt() and 255)
+                }
+            }
+            val bitmap = Bitmap.createBitmap(pixels, 1240, 558, Bitmap.Config.ARGB_8888)
+            val jpeg = try { ByteArrayOutputStream().use { output ->
+                check(bitmap.compress(Bitmap.CompressFormat.JPEG, 95, output)); output.toByteArray()
+            } } finally { bitmap.recycle() }
+            check(jpeg.size <= 700 * 1024) { "地图截图超过绑定传输预算" }
+            return ByteBuffer.allocate(packet.capacity() + 4 + jpeg.size).put(packet.array()).putInt(jpeg.size).put(jpeg).array()
         } finally {
             timeout.cancel(false); process.destroyForcibly()
             synchronized(gate) { if (child === process) child = null }

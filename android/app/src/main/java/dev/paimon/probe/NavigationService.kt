@@ -13,7 +13,6 @@ import android.view.*
 import android.widget.Button
 import java.io.File
 import java.lang.ref.WeakReference
-import java.nio.ByteBuffer
 import java.util.concurrent.Executors
 import org.json.JSONArray
 import org.json.JSONObject
@@ -49,6 +48,8 @@ class NavigationService : Service() {
     private var first = 0
     private var last = 0
     private var sha = ""
+    private var routeExecution = false
+    private var firstTeleportOnly = false
     private val args by lazy {
         Shizuku.UserServiceArgs(ComponentName(this, NavigationInputService::class.java))
             .tag("navigation-$id").daemon(false).processNameSuffix("navigation").version(1)
@@ -66,9 +67,10 @@ class NavigationService : Service() {
                     check(running)
                     val source = RouteImports(this@NavigationService).load()
                     check(RouteNative.prepare(source.name, source.bytes).getString("sha256") == sha) { "路线已改变" }
-                    NavigationNative.preview(source.bytes, first, last)
+                    if (routeExecution) RouteExecutionNative.preview(source.bytes, firstTeleportOnly) else NavigationNative.preview(source.bytes, first, last)
                     input.begin(id)
-                    NavigationNative.begin(id, source.bytes, first, last, SystemClock.elapsedRealtime())
+                    if (routeExecution) RouteExecutionNative.begin(id, source.bytes, firstTeleportOnly, SystemClock.elapsedRealtime())
+                    else NavigationNative.begin(id, source.bytes, first, last, SystemClock.elapsedRealtime())
                 }
                 main.post {
                     busy = false
@@ -85,10 +87,10 @@ class NavigationService : Service() {
         NavigationReports.claim(id)
         active = WeakReference(this)
         getSystemService(NotificationManager::class.java).createNotificationChannel(
-            NotificationChannel("navigation", "地面导航", NotificationManager.IMPORTANCE_LOW))
+            NotificationChannel("navigation", "路线执行", NotificationManager.IMPORTANCE_LOW))
         val stop = PendingIntent.getService(this, 18, Intent(this, NavigationService::class.java).setAction("stop"), PendingIntent.FLAG_IMMUTABLE)
         startForeground(18, Notification.Builder(this, "navigation").setSmallIcon(android.R.drawable.ic_menu_mylocation)
-            .setContentTitle("Paimon：自动地面导航").setContentText("点击停止并释放输入").setContentIntent(stop)
+            .setContentTitle("Paimon：自动路线执行").setContentText("点击停止并释放输入").setContentIntent(stop)
             .addAction(Notification.Action.Builder(null, "停止", stop).build()).build())
         val display = checkNotNull(getSystemService(DisplayManager::class.java).getDisplay(Display.DEFAULT_DISPLAY))
         val context = createDisplayContext(display).createWindowContext(WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY, null)
@@ -103,12 +105,14 @@ class NavigationService : Service() {
             WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL,
             PixelFormat.TRANSLUCENT).apply { gravity = Gravity.TOP or Gravity.CENTER_HORIZONTAL })
         Shizuku.addBinderDeadListener(dead)
-        main.postDelayed({ finish(3, "导航会话达到130秒期限") }, 130_000)
     }
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         if (intent == null || intent.action == "stop") { finish(1, "已主动停止"); return START_NOT_STICKY }
         if (bound || ending) return START_NOT_STICKY
         first = intent.getIntExtra("first", 0); last = intent.getIntExtra("last", 0)
+        routeExecution = intent.getBooleanExtra("routeExecution", false)
+        firstTeleportOnly = intent.getBooleanExtra("firstTeleportOnly", false)
+        main.postDelayed({ finish(3, "路线会话达到期限") }, if (routeExecution) 190_000 else 130_000)
         diagnostics = intent.getBooleanExtra("diagnostics", false)
         sha = intent.getStringExtra("routeSha").orEmpty()
         runCatching {
@@ -143,16 +147,18 @@ class NavigationService : Service() {
         val input = bridge ?: return finish(2, "输入服务不可用")
         busy = true
         busySince = SystemClock.elapsedRealtime()
+        val full = routeExecution && payload.optJSONObject("task")?.optString("phase") != "navigation"
         worker.execute {
             val result = runCatching {
                 check(running)
                 check(input.foregroundPackage() == MovementService.GAME) { "原神不在前台" }
-                val packet = input.capture(id)
-                check(packet.size == 8 + 264 * 264 * 3)
-                val at = ByteBuffer.wrap(packet, 0, 8).long
-                val pixels = packet.copyOfRange(8, packet.size)
-                if (diagnostics && frameCount < 160) saveFrame(pixels, at)
-                NavigationNative.step(id, SystemClock.elapsedRealtime(), capturedAt = at, pixels = pixels)
+                val frame = RouteScreenFrame.decode(if (full) input.captureScreen(id) else input.capture(id), full)
+                if (diagnostics && frameCount < 160) {
+                    saveFrame(frame.mini, frame.capturedAt)
+                    if (frame.jpeg != null && frameCount < 64) File(filesDir, "navigation-frames/$id/${frame.capturedAt}-screen.jpg").writeBytes(frame.jpeg)
+                }
+                if (routeExecution) RouteExecutionNative.step(id, SystemClock.elapsedRealtime(), capturedAt = frame.capturedAt, mini = frame.mini, screen = frame.screen)
+                else NavigationNative.step(id, SystemClock.elapsedRealtime(), capturedAt = frame.capturedAt, pixels = frame.mini)
             }
             main.post {
                 if (!running) return@post
@@ -170,25 +176,27 @@ class NavigationService : Service() {
             history.put(record); historyBytes += size
         } else historyTruncated = true
         val task = value.getJSONObject("task")
-        overlay?.text = "${if (first == 0) "地面路线" else "仅导航分段"} ${task.optInt("current_index")}/${task.optInt("last")} · ${task.optString("state")}\n${task.optString("reason")} · 点击停止"
+        overlay?.text = "${if (firstTeleportOnly) "仅首点传送" else if (first == 0) "原路线" else "仅导航分段"} ${task.optInt("current_index")}/${task.optInt("last")} · ${task.optString("state")}\n${task.optString("reason")} · 点击停止"
         if (!save()) return
         when (value.getJSONObject("command").getString("kind")) {
             "end" -> finish(0, task.getString("reason"))
-            "turn", "move" -> execute(value.getJSONObject("command"), task.getLong("captured_at"))
+            "turn", "move", "tap" -> execute(value.getJSONObject("command"), task.getLong("captured_at"))
         }
     }
     private fun execute(command: JSONObject, at: Long) {
         val input = bridge ?: return finish(2, "输入服务不可用")
         val serial = command.getLong("serial")
         val turn = command.getString("kind") == "turn"
+        val tap = command.getString("kind") == "tap"
         busy = true
         busySince = SystemClock.elapsedRealtime()
         worker.execute {
             val result = runCatching {
                 check(running)
-                val receipt = input.execute(id, serial, if (turn) 1 else 2, command.optInt("dx"), if (turn) 180 else command.getInt("duration_ms"), at)
+                val receipt = input.execute(id, serial, if (tap) 3 else if (turn) 1 else 2, command.optInt("dx"), if (tap) 80 else if (turn) 180 else command.getInt("duration_ms"), at, command.optInt("x"), command.optInt("y"))
                 check(receipt.size == 4)
-                receipt to NavigationNative.acknowledge(id, serial, SystemClock.elapsedRealtime(), receipt[0] == 1L, receipt[1] == 1L)
+                receipt to if (routeExecution) RouteExecutionNative.acknowledge(id, serial, SystemClock.elapsedRealtime(), receipt[0] == 1L, receipt[1] == 1L)
+                    else NavigationNative.acknowledge(id, serial, SystemClock.elapsedRealtime(), receipt[0] == 1L, receipt[1] == 1L)
             }.recoverCatching { error ->
                 if (running && runCatching { input.foregroundPackage() != MovementService.GAME }.getOrDefault(false))
                     throw IllegalStateException("原神不在前台", error)
@@ -199,9 +207,9 @@ class NavigationService : Service() {
                 result.onSuccess { (receipt, value) ->
                     if (receipts.length() < 400) receipts.put(JSONObject().put("serial", serial).put("kind", command.getString("kind"))
                         .put("success", receipt[0] == 1L).put("released", receipt[1] == 1L)
-                        .put("downAt", receipt[2]).put("finishedAt", receipt[3]))
+                        .put("downAt", receipt[2]).put("finishedAt", receipt[3]).put("command", command))
                     accept(value)
-                    main.postDelayed({ if (running) busy = false }, 180)
+                    main.postDelayed({ if (running) busy = false }, if (tap) 40 else 180)
                 }.onFailure { busy = false; finish(if (it.message?.contains("前台") == true) 4 else 3, it.message ?: "输入失败") }
             }
         }
@@ -247,7 +255,8 @@ class NavigationService : Service() {
             heldWhenCancelled = runCatching { input?.holdingSince(id)?.let { it > 0 } ?: false }.getOrDefault(false)
             val released = runCatching { input?.cancel(id) ?: !bound }.getOrDefault(false)
             val final = if (initialized && condition != 0) runCatching {
-                NavigationNative.step(id, SystemClock.elapsedRealtime(), condition)
+                if (routeExecution) RouteExecutionNative.step(id, SystemClock.elapsedRealtime(), condition)
+                else NavigationNative.step(id, SystemClock.elapsedRealtime(), condition)
             }.getOrNull() else null
             main.post {
                 releaseConfirmed = released

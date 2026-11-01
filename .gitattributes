@@ -6,3 +6,7 @@ scripts/*.sh text eol=lf
 /probe-core/tests/fixtures/localization/*.png -text
 /probe-core/tests/fixtures/navigation/*.png -text
 /probe-core/tests/fixtures/navigation/orientation-run/*.png -text
+/probe-core/tests/fixtures/teleport/*.png -text
+/probe-core/tests/fixtures/teleport/*.jpg -text
+/probe-core/tests/fixtures/teleport/phone-run/*.png -text
+/probe-core/tests/fixtures/teleport/phone-run/*.jpg -text
