@@ -1,0 +1,2 @@
+INSTRUMENTATION_RESULT: result=PASS replay: real images at two references, heading, underground rejection; historical positions cannot start navigation
+INSTRUMENTATION_CODE: -1

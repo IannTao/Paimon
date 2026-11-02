@@ -15,13 +15,14 @@ object RouteExecutionNative {
         val value = JSONObject(String(checkNotNull(bytes) { "路线核心会话失效" }, Charsets.UTF_8))
         check(!value.has("error")) { value.optString("error") }; return value
     }
-    private fun scope(firstOnly: Boolean, firstPickup: Boolean): Int {
+    private fun scope(firstOnly: Boolean, pickupMode: Boolean, pickupTargetIndex: Int): Int {
         // 显式区分两类局部验证，避免把“首点传送”和“首目标拾取”同时启用。
-        require(!(firstOnly && firstPickup)) { "执行范围冲突" }
-        return if (firstPickup) 2 else if (firstOnly) 1 else 0
+        require(!(firstOnly && pickupMode)) { "执行范围冲突" }
+        require(pickupTargetIndex in 0..256 && (pickupMode || pickupTargetIndex == 0)) { "拾取目标范围无效" }
+        return if (pickupMode) if (pickupTargetIndex > 0) pickupTargetIndex + 2 else 2 else if (firstOnly) 1 else 0
     }
-    fun preview(route: ByteArray, firstOnly: Boolean = false, firstPickup: Boolean = false) = decode(plan(direct(route), scope(firstOnly, firstPickup)))
-    fun begin(id: Long, route: ByteArray, firstOnly: Boolean, now: Long, firstPickup: Boolean = false) = decode(start(id, direct(route), scope(firstOnly, firstPickup), now))
+    fun preview(route: ByteArray, firstOnly: Boolean = false, pickupMode: Boolean = false, pickupTargetIndex: Int = 0) = decode(plan(direct(route), scope(firstOnly, pickupMode, pickupTargetIndex)))
+    fun begin(id: Long, route: ByteArray, firstOnly: Boolean, now: Long, pickupMode: Boolean = false, pickupTargetIndex: Int = 0) = decode(start(id, direct(route), scope(firstOnly, pickupMode, pickupTargetIndex), now))
     fun step(id: Long, now: Long, condition: Int = 0, capturedAt: Long = 0, mini: ByteArray? = null, screen: ByteArray? = null) =
         decode(update(id, now, condition, capturedAt, mini?.let { direct(it) }, screen?.let { direct(it) }))
     fun acknowledge(id: Long, serial: Long, now: Long, success: Boolean, released: Boolean) = decode(receipt(id, serial, now, success, released))

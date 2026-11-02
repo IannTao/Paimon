@@ -98,8 +98,9 @@ pub struct NavigationTask {
     missing: usize,
     commands_this_point: u64,
     stalled_moves: usize,
+    progress_distance: Option<f64>,
     leg_start: Option<Position>,
-    target_radius: f64,
+    pickup_target: Option<usize>,
 }
 
 pub(crate) fn within_limits(points: &[Point]) -> bool {
@@ -115,8 +116,8 @@ pub(crate) fn within_limits(points: &[Point]) -> bool {
 impl NavigationTask {
     // 拾取需要进入交互范围：只收紧同一原坐标的到点容差，不另造拾取位置。
     // 普通导航仍保留原先真机验证过的2.5单位target容差。
-    pub(crate) fn require_pickup_distance(&mut self) {
-        self.target_radius = 1.0;
+    pub(crate) fn require_pickup_distance(&mut self, index: usize) {
+        self.pickup_target = Some(index);
     }
     pub fn prepare(
         name: &str,
@@ -193,12 +194,13 @@ impl NavigationTask {
             settled: 0,
             previous_position: None,
             camera_gain: None,
-            target_radius: 2.5,
+            pickup_target: None,
             started_at: now,
             last_now: now,
             missing: 0,
             commands_this_point: 0,
             stalled_moves: 0,
+            progress_distance: None,
             leg_start: None,
         })
     }
@@ -359,10 +361,14 @@ impl NavigationTask {
                             y: goal.y,
                         },
                     );
-                    if before_distance - remaining < 0.5 {
+                    // 短步可能每次只改善0.3单位；看窗口起点至当前的净改善，不能逐步误判。
+                    // 不累加正向抖动：未累计接近0.5单位的四次移动仍按无进展停止。
+                    let baseline = self.progress_distance.get_or_insert(before_distance);
+                    if *baseline - remaining < 0.5 {
                         self.stalled_moves += 1;
                     } else {
                         self.stalled_moves = 0;
+                        self.progress_distance = None;
                     }
                     if self.stalled_moves >= 4 {
                         return self.fail("移动无进展，停止导航");
@@ -392,6 +398,11 @@ impl NavigationTask {
         self.last_frame = rgb.to_vec();
         let offset = self.report.current_index - self.report.first;
         let point = &self.points[offset];
+        let target_radius = if self.pickup_target == Some(point.index) {
+            1.0
+        } else {
+            2.5
+        };
         let goal = Position {
             x: point.x,
             y: point.y,
@@ -414,7 +425,7 @@ impl NavigationTask {
         } else {
             remaining
                 <= if point.point_type == "target" {
-                    self.target_radius
+                    target_radius
                 } else {
                     5.0
                 }
@@ -443,6 +454,7 @@ impl NavigationTask {
             self.settled = 0;
             self.commands_this_point = 0;
             self.stalled_moves = 0;
+            self.progress_distance = None;
             self.leg_start = Some(if orientation { position } else { goal });
             self.report.current_index += 1;
             if self.report.current_index > self.report.last {
@@ -478,7 +490,7 @@ impl NavigationTask {
         }
         if !orientation {
             let tolerance = if point.point_type == "target" {
-                self.target_radius
+                target_radius
             } else {
                 5.0
             };

@@ -7,66 +7,63 @@ use paimon_probe::{
 const ORIGINAL: &[u8] = include_bytes!("fixtures/bettergi/route-1.json");
 
 #[test]
-fn the_original_file_replays_real_teleport_navigation_and_pickup_without_manual_coordinates() {
-    let recorded: serde_json_lenient::Value = serde_json_lenient::from_slice(include_bytes!(
-        "../../docs/validation/reports/issue-9/picked-but-unconfirmed.json"
-    ))
-    .unwrap();
-    let history = recorded["history"].as_array().unwrap();
-    let mut task = RouteTask::prepare(
+fn selecting_a_later_original_target_keeps_the_route_and_rejects_non_targets() {
+    let task = RouteTask::prepare(
         "original.json",
         ORIGINAL,
-        ExecutionScope::FirstPickup,
-        history[0]["observedAt"].as_u64().unwrap(),
+        ExecutionScope::PickupTarget { index: 7 },
+        1000,
     )
     .unwrap();
-    let directory =
-        std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/pickup/phone-run");
-    let mut files: Vec<_> = std::fs::read_dir(&directory)
-        .unwrap()
-        .map(|e| e.unwrap().path())
-        .filter(|p| p.extension().is_some_and(|e| e == "png"))
-        .collect();
-    files.sort();
-    let mut images = files.iter();
-    let mut pending = None;
-    for entry in &history[1..] {
-        let now = entry["observedAt"].as_u64().unwrap();
-        if let Some(serial) = pending.take() {
-            task.input_finished(serial, now, true, true);
-            continue;
-        }
-        let file = images.next().unwrap();
-        let stem = file.file_stem().unwrap().to_str().unwrap();
-        let mini = image::open(file).unwrap().to_rgb8();
-        let screen = image::open(directory.join(format!("{stem}-screen.jpg")))
-            .ok()
-            .map(|im| im.to_rgb8());
-        let command = task.step(
-            now,
-            Conditions::Ready,
-            Some(RouteFrame {
-                captured_at: stem.parse().unwrap(),
-                minimap: mini.as_raw(),
-                screen: screen.as_ref().map(|im| im.as_raw().as_slice()),
-            }),
-        );
-        if task.report().pickup_validation_passed {
-            break;
-        }
-        assert_eq!(
-            serde_json_lenient::to_value(command).unwrap(),
-            entry["command"],
-            "frame {stem}: {}",
-            task.report().reason
-        );
-        pending = match command {
-            RouteCommand::Tap { serial, .. }
-            | RouteCommand::Turn { serial, .. }
-            | RouteCommand::Move { serial, .. } => Some(serial),
-            _ => None,
-        };
+    assert_eq!(task.report().pickup_target_index, Some(7));
+    assert_eq!(task.report().current_index, 1);
+    assert_eq!(task.report().last, 7);
+    assert_eq!(
+        task.report().source_sha256,
+        "1646045d03cfb277e3651f341d0d876f9042b080e623149c217bb50517015dd2"
+    );
+    for index in [0, 1, 2, 6, 8, 257] {
+        assert!(RouteTask::prepare(
+            "original.json",
+            ORIGINAL,
+            ExecutionScope::PickupTarget { index },
+            1000
+        )
+        .is_err());
     }
+    assert!(RouteTask::prepare(
+        "unsupported.json",
+        include_bytes!("fixtures/bettergi/route-2.json"),
+        ExecutionScope::PickupTarget { index: 7 },
+        1000
+    )
+    .is_err());
+}
+
+#[test]
+fn several_small_real_steps_toward_the_original_target_must_not_be_reported_as_no_progress() {
+    let (task, remaining) = replay_phone_run(
+        include_bytes!("../../docs/validation/reports/issue-9/slow-approach-false-stall.json"),
+        "slow-approach-run",
+    );
+    assert_eq!(remaining, 0);
+    assert_ne!(
+        task.report().state,
+        paimon_probe::navigation::NavigationState::Failed,
+        "{}",
+        task.report().reason
+    );
+    assert_eq!(task.report().command_count, 54);
+    assert!(task.report().position.is_some());
+    assert!(!task.report().pickup_validation_passed && !task.report().original_route_passed);
+}
+
+#[test]
+fn the_original_file_replays_real_teleport_navigation_and_pickup_without_manual_coordinates() {
+    let (task, _) = replay_phone_run(
+        include_bytes!("../../docs/validation/reports/issue-9/picked-but-unconfirmed.json"),
+        "phone-run",
+    );
     assert!(
         task.report().pickup_validation_passed,
         "{}",
@@ -354,4 +351,70 @@ fn missing_position_revokes_its_timestamp_and_requires_fresh_consecutive_prompt_
         frame(&mut task, 2000, Some("seed-prompt")),
         RouteCommand::Tap { .. }
     ));
+}
+
+fn replay_phone_run(recorded_bytes: &[u8], images_dir: &str) -> (RouteTask, usize) {
+    let recorded: serde_json_lenient::Value =
+        serde_json_lenient::from_slice(recorded_bytes).unwrap();
+    let history = recorded["history"].as_array().unwrap();
+    let mut task = RouteTask::prepare(
+        "original.json",
+        ORIGINAL,
+        ExecutionScope::FirstPickup,
+        history[0]["observedAt"].as_u64().unwrap(),
+    )
+    .unwrap();
+    let directory = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join(format!("tests/fixtures/pickup/{images_dir}"));
+    let mut files: Vec<_> = std::fs::read_dir(&directory)
+        .unwrap()
+        .map(|e| e.unwrap().path())
+        .filter(|p| p.extension().is_some_and(|e| e == "png"))
+        .collect();
+    files.sort();
+    let mut images = files.iter();
+    let mut pending = None;
+    for entry in &history[1..] {
+        let now = entry["observedAt"].as_u64().unwrap();
+        if let Some(serial) = pending.take() {
+            task.input_finished(serial, now, true, true);
+            continue;
+        }
+        let file = images.next().unwrap();
+        let stem = file.file_stem().unwrap().to_str().unwrap();
+        let mini = image::open(file).unwrap().to_rgb8();
+        let screen = image::open(directory.join(format!("{stem}-screen.jpg")))
+            .ok()
+            .map(|im| im.to_rgb8());
+        let command = task.step(
+            now,
+            Conditions::Ready,
+            Some(RouteFrame {
+                captured_at: stem.parse().unwrap(),
+                minimap: mini.as_raw(),
+                screen: screen.as_ref().map(|im| im.as_raw().as_slice()),
+            }),
+        );
+        if task.report().pickup_validation_passed {
+            break;
+        }
+        if entry["command"]["kind"] == "end" {
+            // 原设备误停的终帧应继续观察；此前的所有实际输入仍逐条核对。
+            assert_eq!(command, RouteCommand::Observe, "{}", task.report().reason);
+        } else {
+            assert_eq!(
+                serde_json_lenient::to_value(command).unwrap(),
+                entry["command"],
+                "frame {stem}: {}",
+                task.report().reason
+            );
+        }
+        pending = match command {
+            RouteCommand::Tap { serial, .. }
+            | RouteCommand::Turn { serial, .. }
+            | RouteCommand::Move { serial, .. } => Some(serial),
+            _ => None,
+        };
+    }
+    (task, images.count())
 }

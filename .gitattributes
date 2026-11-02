@@ -14,3 +14,5 @@ scripts/*.sh text eol=lf
 /probe-core/tests/fixtures/pickup/*.jpg -text
 /probe-core/tests/fixtures/pickup/phone-run/*.png -text
 /probe-core/tests/fixtures/pickup/phone-run/*.jpg -text
+/probe-core/tests/fixtures/pickup/slow-approach-run/*.png -text
+/probe-core/tests/fixtures/pickup/slow-approach-run/*.jpg -text

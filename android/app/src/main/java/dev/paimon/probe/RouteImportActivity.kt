@@ -51,7 +51,16 @@ class RouteImportActivity : Activity() {
         button(content, "读取已保存路线（离线）") { restore() }
         button(content, "启动整条受支持路线") { startNavigation(0, 0) }
         button(content, "仅验证首个传送点（非整条通过）") { startNavigation(0, 0, firstTeleportOnly = true) }
-        button(content, "验证首个目标点拾取（非整条采集）") { startNavigation(0, 0, firstPickup = true) }
+        button(content, "验证首个目标点拾取（非整条采集）") { startNavigation(0, 0, pickupMode = true) }
+        val pickupTarget = EditText(this).apply {
+            hint = "拾取目标原序号（须为target点）"; inputType = InputType.TYPE_CLASS_NUMBER
+            setText("7"); content.addView(this)
+        }
+        button(content, "验证指定目标点拾取（非整条采集）") {
+            val index = pickupTarget.text.toString().toIntOrNull()
+            if (index == null || index !in 1..256) localization.text = "拾取目标原序号无效"
+            else startNavigation(0, 0, pickupMode = true, pickupTargetIndex = index)
+        }
         segmentFirst = EditText(this).apply { hint = "分段首点序号（原数组，1起算）"; inputType = InputType.TYPE_CLASS_NUMBER; setText("2"); content.addView(this) }
         segmentLast = EditText(this).apply { hint = "分段末点序号"; inputType = InputType.TYPE_CLASS_NUMBER; setText("4"); content.addView(this) }
         diagnostics = CheckBox(this).apply { text = "保存本次诊断画面（最多160帧小地图＋64帧界面概览）"; content.addView(this) }
@@ -173,14 +182,14 @@ class RouteImportActivity : Activity() {
         }.onFailure { localization.text = "定位准备未启动：${it.message}" }
     }
 
-    private fun startNavigation(first: Int, last: Int, firstTeleportOnly: Boolean = false, firstPickup: Boolean = false) {
+    private fun startNavigation(first: Int, last: Int, firstTeleportOnly: Boolean = false, pickupMode: Boolean = false, pickupTargetIndex: Int = 0) {
         val source = selected ?: run { localization.text = "请先导入路线"; return }
         val report = current ?: return
         val request = generation.incrementAndGet()
         localization.text = "正在检查导航范围…"
         worker.execute {
             val routeExecution = first == 0 && last == 0
-            val result = runCatching { if (routeExecution) RouteExecutionNative.preview(source.bytes, firstTeleportOnly, firstPickup) else NavigationNative.preview(source.bytes, first, last) }
+            val result = runCatching { if (routeExecution) RouteExecutionNative.preview(source.bytes, firstTeleportOnly, pickupMode, pickupTargetIndex) else NavigationNative.preview(source.bytes, first, last) }
             runOnUiThread {
                 if (isDestroyed || request != generation.get()) return@runOnUiThread
                 result.onSuccess {
@@ -195,7 +204,8 @@ class RouteImportActivity : Activity() {
                         startForegroundService(Intent(this, NavigationService::class.java)
                             .putExtra("routeSha", report.getString("sha256")).putExtra("first", first).putExtra("last", last)
                             .putExtra("routeExecution", routeExecution).putExtra("firstTeleportOnly", firstTeleportOnly)
-                            .putExtra("firstPickup", firstPickup)
+                            .putExtra("pickupMode", pickupMode)
+                            .putExtra("pickupTargetIndex", pickupTargetIndex)
                             .putExtra("diagnostics", diagnostics.isChecked))
                         startActivity(game)
                     }.onFailure { localization.text = "导航未启动：${it.message}" }

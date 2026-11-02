@@ -33,7 +33,7 @@ class PickupDeviceChecks : Instrumentation() {
             awaitActivityText(route, if (scenario == "unsupported") "路径点：1" else "路径点：7")
             if (scenario == "unsupported") {
                 val previous = runCatching { NavigationReports.latest(targetContext).getLong("runId") }.getOrNull()
-                clickButton(route, "仅验证首个传送点（非整条通过）")
+                clickButton(route, "验证首个目标点拾取（非整条采集）")
                 awaitActivityText(route, "传送目标、动作或参数尚未支持")
                 check(runCatching { NavigationReports.latest(targetContext).getLong("runId") }.getOrNull() == previous)
                 result.putString("result", "PASS unsupported force_tp: no input session started")
@@ -41,14 +41,19 @@ class PickupDeviceChecks : Instrumentation() {
             }
             runOnMainSync { activityViews(route.window.decorView).filterIsInstance<CheckBox>().single().isChecked = true }
             val started = SystemClock.elapsedRealtimeNanos()
-            clickButton(route, "验证首个目标点拾取（非整条采集）")
+            clickButton(route, if (scenario == "target-7") "验证指定目标点拾取（非整条采集）" else "验证首个目标点拾取（非整条采集）")
             val until = SystemClock.uptimeMillis() + 195_000
             var proof: JSONObject? = null
             var triggered = false
             while (SystemClock.uptimeMillis() < until) {
                 val report = runCatching { NavigationReports.latest(targetContext) }.getOrNull()
                 if (report != null && report.optLong("runId") >= started) {
-                    if (!triggered && scenario in listOf("stop", "foreground") && report.optLong("holdingSince") > 0 && report.optJSONObject("payload")?.optJSONObject("task")?.optString("phase") == "pickup_search") {
+                    val payload = report.optJSONObject("payload")
+                    // 导航交接也处于pickup_search，但可能带着上一手势的历史按住时间。
+                    // 新turn命令会先清零该时间；这里只等待它被shell当前实际DOWN重新填入。
+                    val searchingTurn = payload?.optJSONObject("task")?.optString("phase") == "pickup_search" &&
+                        payload.optJSONObject("command")?.optString("kind") == "turn"
+                    if (!triggered && scenario in listOf("stop", "foreground") && searchingTurn && report.optLong("holdingSince") > 0) {
                         triggered = true
                         if (scenario == "stop") targetContext.startService(Intent(targetContext, NavigationService::class.java).setAction("stop"))
                         else targetContext.startActivity(Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_HOME).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
@@ -71,9 +76,10 @@ class PickupDeviceChecks : Instrumentation() {
                     check(first.getInt("index") == 1 && first.getInt("original_id") == 1 && first.getString("point_type") == "teleport" && first.getDouble("distance") <= 8)
                     check(task.getBoolean("pickup_validation_passed") && !task.getBoolean("original_route_passed"))
                     val pickup = task.getJSONObject("pickup_evidence")
-                    check(pickup.getInt("target_index") == 4 && pickup.getInt("original_id") == 4 && pickup.getString("item") == "琉璃百合" && pickup.getInt("quantity") == 1)
-                    check(task.getInt("current_index") == 5 && pickup.getLong("obtained_captured_at") > pickup.getLong("prompt_captured_at"))
-                    check(task.getJSONArray("completed_points").length() == 4)
+                    val targetIndex = if (scenario == "target-7") 7 else 4
+                    check(pickup.getInt("target_index") == targetIndex && pickup.getInt("original_id") == targetIndex && pickup.getString("item") == "琉璃百合" && pickup.getInt("quantity") == 1)
+                    check(task.getInt("current_index") == targetIndex + 1 && pickup.getLong("obtained_captured_at") > pickup.getLong("prompt_captured_at"))
+                    check(task.getJSONArray("completed_points").length() == targetIndex)
                 }
             }
             if (scenario in listOf("stop", "foreground")) {

@@ -51,7 +51,8 @@ class NavigationService : Service() {
     private var sha = ""
     private var routeExecution = false
     private var firstTeleportOnly = false
-    private var firstPickup = false
+    private var pickupMode = false
+    private var pickupTargetIndex = 0
     private val args by lazy {
         Shizuku.UserServiceArgs(ComponentName(this, NavigationInputService::class.java))
             .tag("navigation-$id").daemon(false).processNameSuffix("navigation").version(1)
@@ -69,9 +70,9 @@ class NavigationService : Service() {
                     check(running)
                     val source = RouteImports(this@NavigationService).load()
                     check(RouteNative.prepare(source.name, source.bytes).getString("sha256") == sha) { "路线已改变" }
-                    if (routeExecution) RouteExecutionNative.preview(source.bytes, firstTeleportOnly, firstPickup) else NavigationNative.preview(source.bytes, first, last)
+                    if (routeExecution) RouteExecutionNative.preview(source.bytes, firstTeleportOnly, pickupMode, pickupTargetIndex) else NavigationNative.preview(source.bytes, first, last)
                     input.begin(id)
-                    if (routeExecution) RouteExecutionNative.begin(id, source.bytes, firstTeleportOnly, SystemClock.elapsedRealtime(), firstPickup)
+                    if (routeExecution) RouteExecutionNative.begin(id, source.bytes, firstTeleportOnly, SystemClock.elapsedRealtime(), pickupMode, pickupTargetIndex)
                     else NavigationNative.begin(id, source.bytes, first, last, SystemClock.elapsedRealtime())
                 }
                 main.post {
@@ -114,7 +115,8 @@ class NavigationService : Service() {
         first = intent.getIntExtra("first", 0); last = intent.getIntExtra("last", 0)
         routeExecution = intent.getBooleanExtra("routeExecution", false)
         firstTeleportOnly = intent.getBooleanExtra("firstTeleportOnly", false)
-        firstPickup = intent.getBooleanExtra("firstPickup", false)
+        pickupMode = intent.getBooleanExtra("pickupMode", false)
+        pickupTargetIndex = intent.getIntExtra("pickupTargetIndex", 0)
         main.postDelayed({ finish(3, "路线会话达到期限") }, if (routeExecution) 190_000 else 130_000)
         diagnostics = intent.getBooleanExtra("diagnostics", false)
         sha = intent.getStringExtra("routeSha").orEmpty()
@@ -186,7 +188,7 @@ class NavigationService : Service() {
             history.put(record); historyBytes += size
         } else historyTruncated = true
         val task = value.getJSONObject("task")
-        overlay?.text = "${if (firstPickup) "仅首个目标拾取" else if (firstTeleportOnly) "仅首点传送" else if (first == 0) "原路线" else "仅导航分段"} ${task.optInt("current_index")}/${task.optInt("last")} · ${task.optString("state")}\n${task.optString("reason")} · 点击停止"
+        overlay?.text = "${if (pickupMode) if (pickupTargetIndex > 0) "仅原第${pickupTargetIndex}点拾取" else "仅首个目标拾取" else if (firstTeleportOnly) "仅首点传送" else if (first == 0) "原路线" else "仅导航分段"} ${task.optInt("current_index")}/${task.optInt("last")} · ${task.optString("state")}\n${task.optString("reason")} · 点击停止"
         if (!save()) return
         when (value.getJSONObject("command").getString("kind")) {
             "end" -> finish(0, task.getString("reason"))

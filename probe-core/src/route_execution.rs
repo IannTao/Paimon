@@ -21,6 +21,8 @@ pub enum ExecutionScope {
     FirstTeleport,
     /// 从原首点执行到第一个target，确认一个物品后交回下一原索引并结束验证。
     FirstPickup,
+    /// 显式验证某个原target；仍从原首点执行全部前置点，不改写或跳过导航。
+    PickupTarget { index: usize },
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Serialize)]
@@ -174,7 +176,16 @@ impl RouteTask {
             return Err("首点不是teleport，不能作为首点传送验证".into());
         }
         // target只提供到达位置；是否存在资源以及是否取得，必须随后由真实画面证明。
-        let pickup_target_index = if scope == ExecutionScope::FirstPickup {
+        let pickup_target_index = if let ExecutionScope::PickupTarget { index } = scope {
+            if !route
+                .points
+                .iter()
+                .any(|p| p.index == index && p.point_type == "target")
+            {
+                return Err("所选原序号不存在或不是target点".into());
+            }
+            Some(index)
+        } else if scope == ExecutionScope::FirstPickup {
             Some(
                 route
                     .points
@@ -576,8 +587,8 @@ impl RouteTask {
             ) {
                 Ok(mut task) => {
                     // 普通导航的2.5单位容差不保证进入交互范围；拾取向同一原坐标靠近。
-                    if self.report.scope == ExecutionScope::FirstPickup {
-                        task.require_pickup_distance();
+                    if let Some(index) = self.report.pickup_target_index {
+                        task.require_pickup_distance(index);
                     }
                     self.ground = Some(task);
                 }
@@ -747,7 +758,8 @@ impl RouteTask {
                     self.report.state = NavigationState::Completed;
                     self.report.phase = ExecutionPhase::Finished;
                     self.report.reason =
-                        "首个target取得单个物品已确认；下一点已交回路线进度，未验证整条采集".into();
+                        "所选原target取得单个物品已确认；下一点已交回路线进度，未验证整条采集"
+                            .into();
                     return RouteCommand::End;
                 }
             } else {

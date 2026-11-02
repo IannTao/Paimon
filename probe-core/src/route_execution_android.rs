@@ -12,6 +12,10 @@ fn scope(code: i32) -> Result<ExecutionScope, String> {
         0 => Ok(ExecutionScope::WholeRoute),
         1 => Ok(ExecutionScope::FirstTeleport),
         2 => Ok(ExecutionScope::FirstPickup),
+        // 显式原target序号编码为index+2，仍由prepare检查整条路线及点类型。
+        3..=258 => Ok(ExecutionScope::PickupTarget {
+            index: code as usize - 2,
+        }),
         _ => Err("未知路线执行范围".into()),
     }
 }
